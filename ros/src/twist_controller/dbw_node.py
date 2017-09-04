@@ -4,9 +4,13 @@ import rospy
 from std_msgs.msg import Bool
 from dbw_mkz_msgs.msg import ThrottleCmd, SteeringCmd, BrakeCmd, SteeringReport
 from geometry_msgs.msg import TwistStamped
+from styx_msgs.msg import Lane, Waypoint
+from geometry_msgs.msg import PoseStamped
 import math
 
 from twist_controller import Controller
+
+MPH2MPS       = 0.44704 # Conversion miles per hour to meters per second
 
 '''
 You can build this node only after you have built (or partially built) the `waypoint_updater` node.
@@ -53,25 +57,42 @@ class DBWNode(object):
         self.brake_pub = rospy.Publisher('/vehicle/brake_cmd',
                                          BrakeCmd, queue_size=1)
 
-        # TODO: Create `TwistController` object
-        # self.controller = TwistController(<Arguments you wish to provide>)
+        # Create `TwistController` object
+        self.controller = Controller()
 
-        # TODO: Subscribe to all the topics you need to
+        # Subscribe
+        rospy.Subscriber('/final_waypoints', Lane, self.finalwpts_cb,queue_size=1)
+        rospy.Subscriber('/vehicle/dbw_enabled', Bool, self.DBWEnabled_cb,queue_size=1)
+        rospy.Subscriber('/current_pose', PoseStamped, self.CurrPose_cb,queue_size=1)
+        rospy.Subscriber('/current_velocity', TwistStamped, self.CurrVel_cb,queue_size=1)
+        rospy.Subscriber('/twist_cmd', TwistStamped, self.TwistCmd_cb,queue_size=1)
+        
+        self.dbw_enabled      = False
+        self.current_velocity = None # Current Velocity - Units (?)
+        self.finalwpts        = None # Final Waypoints  - Units (?)
+        self.current_pose     = None # Current Pose     - Units (?)
+        self.twist_cmd        = None # TwistCmd         - Units (?)
 
         self.loop()
 
     def loop(self):
         rate = rospy.Rate(50) # 50Hz
         while not rospy.is_shutdown():
-            # TODO: Get predicted throttle, brake, and steering using `twist_controller`
-            # You should only publish the control commands if dbw is enabled
-            # throttle, brake, steering = self.controller.control(<proposed linear velocity>,
-            #                                                     <proposed angular velocity>,
-            #                                                     <current linear velocity>,
-            #                                                     <dbw status>,
-            #                                                     <any other argument you need>)
-            # if <dbw is enabled>:
-            #   self.publish(throttle, brake, steer)
+            if self.finalwpts != None and self.current_velocity != None:
+                proposed_linear_velocity  = self.finalwpts[0].twist.twist.linear.x
+                proposed_angular_velocity = 0 #TODO figure out how to compute this...
+                current_linear_velocity   = self.current_velocity.linear.x
+                print('DBW NODE :: TGT Velocity     ', proposed_linear_velocity)
+                print('DBW NODE :: Current Velocity ', current_linear_velocity)
+                #print('DBW NODE :: DBW_STATUS       ', self.dbw_enabled)
+                dbw_status                = self.dbw_enabled
+                dbw_status                = True # TODO: DBW is always false for some reason need to fix this...          
+                throttle, brake, steering = self.controller.control(proposed_linear_velocity,
+                                                                proposed_angular_velocity,
+                                                                current_linear_velocity,
+                                                                dbw_status)
+                if dbw_status:
+                    self.publish(throttle, brake, steering)
             rate.sleep()
 
     def publish(self, throttle, brake, steer):
@@ -80,18 +101,35 @@ class DBWNode(object):
         tcmd.pedal_cmd_type = ThrottleCmd.CMD_PERCENT
         tcmd.pedal_cmd = throttle
         self.throttle_pub.publish(tcmd)
+        print('DBW NODE :: Throttle Command ',throttle)
 
         scmd = SteeringCmd()
         scmd.enable = True
         scmd.steering_wheel_angle_cmd = steer
         self.steer_pub.publish(scmd)
+        print('DBW NODE :: Steering Command ',steer)
 
         bcmd = BrakeCmd()
         bcmd.enable = True
         bcmd.pedal_cmd_type = BrakeCmd.CMD_TORQUE
         bcmd.pedal_cmd = brake
         self.brake_pub.publish(bcmd)
+        print('DBW NODE :: Brake Command ',brake)
+        
+    def finalwpts_cb(self, msg):
+        self.finalwpts = msg.waypoints
+        
+    def DBWEnabled_cb(self, msg):
+        self.dbw_enabled = msg.data
+    
+    def CurrPose_cb(self, msg):
+        self.current_pose = msg.pose.position
 
+    def CurrVel_cb(self, msg):
+        self.current_velocity = msg.twist
+        
+    def TwistCmd_cb(self, msg):
+        self.twist_cmd = msg.twist
 
 if __name__ == '__main__':
     DBWNode()
