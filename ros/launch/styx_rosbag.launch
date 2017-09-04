@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<launch>
+    <arg name="recorddata" default="true" />
+
+    <!-- Simulator Bridge -->
+    <include file="$(find styx)/launch/server.launch" />
+    
+    <!-- Rosbag Data Save -->
+    <node name="record" pkg="rosbag" type="record" args="record -o /home/honeywell/Desktop/UDACITY/Term3/MyRepo/CarND-Capstone/rosbags/simdata_ /current_pose /current_velocity /vehicle/brake_cmd /vehicle/brake_report /vehicle/dbw_enabled /vehicle/lidar /vehicle/obstacle /vehicle/obstacle_points /vehicle/steering_cmd /vehicle/steering_report /vehicle/throttle_cmd /vehicle/throttle_report /vehicle/traffic_lights" if="$(arg recorddata)"/>
+
+</launch>
