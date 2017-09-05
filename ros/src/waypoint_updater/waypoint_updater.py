@@ -21,10 +21,11 @@ as well as to verify your TL classifier.
 TODO (for Yousuf and Aaron): Stopline location for each traffic light.
 '''
 
-LOOKAHEAD_WPS = 50      # Number of waypoints published
-SPEED_MPH     = 20      # Forward speed in miles per hour
+LOOKAHEAD_WPS = 5      # Number of waypoints published
+SPEED_MPH     = 10      # Forward speed in miles per hour
 MPH2MPS       = 0.44704 # Conversion miles per hour to meters per second
 FRAME_ID      = 'WPT'   # ROS TF Frame ID of published waypoints
+DEBUG         = False   # True = Print Statements appear in Terminal with Debug info
 
 class WaypointUpdater(object):
     def __init__(self):
@@ -53,7 +54,8 @@ class WaypointUpdater(object):
         if self.waypoints != None:
             self.find_next_waypoint()
             self.final_wpts = Lane()
-            print('WAYPOINT UPDATER :: WPT Ahead ',"x: ",self.wpt_ahead.pose.pose.position.x,"y: ",self.wpt_ahead.pose.pose.position.y,"idx: ",self.wpt_ahead_idx)
+            if DEBUG:
+                print('WAYPOINT UPDATER :: WPT Ahead ',"x: ",self.wpt_ahead.pose.pose.position.x,"y: ",self.wpt_ahead.pose.pose.position.y,"idx: ",self.wpt_ahead_idx)
             #Form final waypoint list from starting waypoint to waypoints ahead
             final_wpt_idx = self.wpt_ahead_idx+LOOKAHEAD_WPS
             if final_wpt_idx < len(self.waypoints):
@@ -76,7 +78,8 @@ class WaypointUpdater(object):
         self.pos_x =msg.pose.position.x
         self.pos_y =msg.pose.position.y
         self.pos_z =msg.pose.position.z
-        print("WAYPOINT UPDATER :: Curr Pos  ","x: ",self.pos_x, "y: ", self.pos_y)
+        if DEBUG:
+            print("WAYPOINT UPDATER :: Curr Pos  ","x: ",self.pos_x, "y: ", self.pos_y)
         self.loop();
         
         pass
