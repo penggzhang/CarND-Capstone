@@ -12,7 +12,7 @@ import numpy as np
 import rospy
 
 MPH2MPS       = 0.44704  # Conversion miles per hour to meters per second
-DEBUG         = True    # True = Print Statements appear in Terminal with Debug info
+DEBUG         = False    # True = Print Statements appear in Terminal with Debug info
 
 '''
 You can build this node only after you have built (or partially built) the `waypoint_updater` node.
@@ -78,7 +78,7 @@ class DBWNode(object):
         self.loop()
 
     def loop(self):
-        rate = rospy.Rate(50)
+        rate = rospy.Rate(10)
         while not rospy.is_shutdown():
             if self.finalwpts != None and self.current_velocity != None:
                 proposed_linear_velocity  = self.twist_cmd.linear.x #self.finalwpts[0].twist.twist.linear.x

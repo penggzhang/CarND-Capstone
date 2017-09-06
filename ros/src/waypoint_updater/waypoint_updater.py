@@ -21,7 +21,7 @@ as well as to verify your TL classifier.
 TODO (for Yousuf and Aaron): Stopline location for each traffic light.
 '''
 
-LOOKAHEAD_WPS = 5      # Number of waypoints published
+LOOKAHEAD_WPS = 5       # Number of waypoints published
 SPEED_MPH     = 10      # Forward speed in miles per hour
 MPH2MPS       = 0.44704 # Conversion miles per hour to meters per second
 FRAME_ID      = 'WPT'   # ROS TF Frame ID of published waypoints
@@ -31,8 +31,8 @@ class WaypointUpdater(object):
     def __init__(self):
         rospy.init_node('waypoint_updater')
 
-        rospy.Subscriber('/current_pose', PoseStamped, self.pose_cb)
-        rospy.Subscriber('/base_waypoints', Lane, self.waypoints_cb)
+        rospy.Subscriber('/current_pose', PoseStamped, self.pose_cb, queue_size=1)
+        rospy.Subscriber('/base_waypoints', Lane, self.waypoints_cb, queue_size=1)
 
         # TODO: Add a subscriber for /traffic_waypoint and /obstacle_waypoint below
 
@@ -54,6 +54,7 @@ class WaypointUpdater(object):
         if self.waypoints != None:
             self.find_next_waypoint()
             self.final_wpts = Lane()
+            
             if DEBUG:
                 print('WAYPOINT UPDATER :: WPT Ahead ',"x: ",self.wpt_ahead.pose.pose.position.x,"y: ",self.wpt_ahead.pose.pose.position.y,"idx: ",self.wpt_ahead_idx)
             #Form final waypoint list from starting waypoint to waypoints ahead
@@ -61,12 +62,14 @@ class WaypointUpdater(object):
             if final_wpt_idx < len(self.waypoints):
                 self.final_wpts.waypoints = self.waypoints[self.wpt_ahead_idx:final_wpt_idx]
             else:
-                self.final_wpts = self.waypoints[self.wpt_ahead_idx:len(self.waypoints)]
+                self.final_wpts.waypoints = self.waypoints[self.wpt_ahead_idx:len(self.waypoints)]
             #Fill Speed
             for wpt in self.final_wpts.waypoints:
                 wpt.twist.twist.linear.x = 20*MPH2MPS
                 wpt.twist.twist.linear.y = 0
                 wpt.twist.twist.linear.z = 0
+            if DEBUG:
+                print('WAYPOINT UPDATER :: Final WPT List Length: ', len(self.final_wpts.waypoints))    
             #Fill Header
             self.final_wpts.header.stamp    = rospy.Time.now()
             self.final_wpts.header.frame_id = FRAME_ID
@@ -134,7 +137,6 @@ class WaypointUpdater(object):
             dist += dl(waypoints[wp1].pose.pose.position, waypoints[i].pose.pose.position)
             wp1 = i
         return dist
-
 
 if __name__ == '__main__':
     try:
