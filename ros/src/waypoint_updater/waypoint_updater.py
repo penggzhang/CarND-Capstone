@@ -21,7 +21,7 @@ as well as to verify your TL classifier.
 TODO (for Yousuf and Aaron): Stopline location for each traffic light.
 '''
 
-LOOKAHEAD_WPS = 5       # Number of waypoints published
+LOOKAHEAD_WPS = 10      # Number of waypoints published
 SPEED_MPH     = 10      # Forward speed in miles per hour
 MPH2MPS       = 0.44704 # Conversion miles per hour to meters per second
 FRAME_ID      = 'WPT'   # ROS TF Frame ID of published waypoints
@@ -39,13 +39,14 @@ class WaypointUpdater(object):
         self.final_waypoints_pub = rospy.Publisher('final_waypoints', Lane, queue_size=1)
 
         # TODO: Add other member variables you need below
-        self.pos_x         = 0.0;
-        self.pos_y         = 0.0;
-        self.pos_z         = 0.0;
-        self.waypoints     = None;
-        self.wpt_ahead_idx = 0;       
-        self.wpt_ahead     = None;
-        self.final_wpts    = None;
+        self.pos_x          = 0.0
+        self.pos_y          = 0.0
+        self.pos_z          = 0.0
+        self.waypoints      = None
+        self.wpt_ahead_idx  = 0       
+        self.wpt_ahead      = None
+        self.final_wpts     = None
+        self.current_orient = None
 
         rospy.spin()
         
@@ -81,6 +82,7 @@ class WaypointUpdater(object):
         self.pos_x =msg.pose.position.x
         self.pos_y =msg.pose.position.y
         self.pos_z =msg.pose.position.z
+        self.current_orient = msg.pose.orientation
         if DEBUG:
             print("WAYPOINT UPDATER :: Curr Pos  ","x: ",self.pos_x, "y: ", self.pos_y)
         self.loop();
@@ -112,6 +114,10 @@ class WaypointUpdater(object):
                 self.wpt_ahead     = wpt
                 self.wpt_ahead_idx = idx
                 closestlen         = dist
+                stored_brg         = brg
+        #print("WAYPOINT UPDATER :: del_y   ",self.del_y)
+        #print("WAYPOINT UPDATER :: del_x   ",self.del_x)
+        #print("WAYPOINT UPDATER :: Bearing ",stored_brg)
         pass
     
     # When a message is recieved from /base_waypoints topic store it
@@ -124,9 +130,18 @@ class WaypointUpdater(object):
         dist = math.sqrt((self.pos_x-wpt.pose.pose.position.x)**2 + (self.pos_y-wpt.pose.pose.position.y)**2  + (self.pos_z-wpt.pose.pose.position.z)**2)
         return dist
     
-    # Find the bearing from current position to waypoint
+    # Find the bearing from current position to waypoint, need to rotate to car body frame
     def bearing_wpt2curr(self, wpt):
-        bearing = math.atan2((wpt.pose.pose.position.y-self.pos_y),(wpt.pose.pose.position.x-self.pos_x))
+        global_car_x = self.pos_x
+        global_car_y = self.pos_y
+        
+        roll,pitch,yaw = tf.transformations.euler_from_quaternion([self.current_orient.x,self.current_orient.y,self.current_orient.z,self.current_orient.w])
+        yaw = -1.*yaw # TODO: Need to invert the sign of yaw for things to work, not clear why
+            
+        self.del_y =  (wpt.pose.pose.position.x - global_car_x)*math.cos(yaw) - (wpt.pose.pose.position.y - global_car_y)*math.sin(yaw)
+        self.del_x =  (wpt.pose.pose.position.x - global_car_x)*math.sin(yaw) + (wpt.pose.pose.position.y - global_car_y)*math.cos(yaw)  
+            
+        bearing = math.atan2(self.del_y,self.del_x)
         return bearing    
         
     # Find the distance between 2 waypoints    

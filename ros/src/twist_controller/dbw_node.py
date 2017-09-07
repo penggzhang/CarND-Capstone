@@ -12,7 +12,7 @@ import numpy as np
 import rospy
 
 MPH2MPS       = 0.44704  # Conversion miles per hour to meters per second
-DEBUG         = False    # True = Print Statements appear in Terminal with Debug info
+DEBUG         = False     # True = Print Statements appear in Terminal with Debug info
 
 '''
 You can build this node only after you have built (or partially built) the `waypoint_updater` node.
@@ -88,9 +88,9 @@ class DBWNode(object):
                 dbw_status                = self.dbw_enabled
                 dbw_status                = True # TODO: Hack, DBW is always false for some reason need to fix this...  
                 if DEBUG:
-                    print('DBW NODE :: Vel Err          ', proposed_linear_velocity-current_linear_velocity)
+                    #print('DBW NODE :: Vel Err          ', proposed_linear_velocity-current_linear_velocity)
                     print('DBW NODE :: CTE              ', self.CTE)
-                    print('DBW NODE :: DBW_STATUS       ', self.dbw_enabled)
+                    #print('DBW NODE :: DBW_STATUS       ', self.dbw_enabled)
                 
                 throttle, brake, steering = self.controller.control(proposed_linear_velocity,
                                                                     proposed_angular_velocity,
@@ -108,20 +108,20 @@ class DBWNode(object):
         tcmd.pedal_cmd_type = ThrottleCmd.CMD_PERCENT
         tcmd.pedal_cmd = throttle
         self.throttle_pub.publish(tcmd)
-        print('DBW NODE :: Throttle Command ',throttle)
+        #print('DBW NODE :: Throttle Command ',throttle)
 
         scmd = SteeringCmd()
         scmd.enable = True
         scmd.steering_wheel_angle_cmd = steer
         self.steer_pub.publish(scmd)
-        print('DBW NODE :: Steering Command ',steer)
+        #print('DBW NODE :: Steering Command ',steer)
 
         bcmd = BrakeCmd()
         bcmd.enable = True
         bcmd.pedal_cmd_type = BrakeCmd.CMD_TORQUE
         bcmd.pedal_cmd = brake
         self.brake_pub.publish(bcmd)
-        print('DBW NODE :: Brake Command ',brake)
+        #print('DBW NODE :: Brake Command ',brake)
         
     def finalwpts_cb(self, msg):
         self.finalwpts = msg.waypoints
@@ -147,6 +147,11 @@ class DBWNode(object):
         global_car_y = self.current_pose.y
         
         roll,pitch,yaw = tf.transformations.euler_from_quaternion([self.current_orient.x,self.current_orient.y,self.current_orient.z,self.current_orient.w])
+        yaw = -1.*yaw # TODO: Need to invert the sign of yaw for things to work, not clear why
+        #yaw in radians
+        
+        if DEBUG:
+            print('DBW NODE :: YAW(deg)             ', yaw*180/math.pi)
         
         x_car_body = []
         y_car_body = []
@@ -155,15 +160,26 @@ class DBWNode(object):
             del_x = wpt.pose.pose.position.x - global_car_x
             del_y = wpt.pose.pose.position.y - global_car_y
             
-            temp1 =  del_x*math.cos(yaw) + del_y*math.sin(yaw)
-            temp2 = -del_x*math.sin(yaw) + del_y*math.cos(yaw)
+            temp1 =  del_x*math.cos(yaw) - del_y*math.sin(yaw)
+            temp2 =  del_x*math.sin(yaw) + del_y*math.cos(yaw)
             
             x_car_body.append(temp1)
             y_car_body.append(temp2)
+            
+            if DEBUG:
+                print('DBW NODE :: FIN_WPT X POS             ', temp1)
+                print('DBW NODE :: FIN_WPT Y POS             ', temp2)
         
         # As with MPC project, fit a 3rd order polynomial that fits most roads    
         coeff_3rd = np.polyfit(x_car_body,y_car_body,3)
         CTE       = np.polyval(coeff_3rd,0.0)
+        
+        #Limit CTE to +/-5 which is empirically the limits of the lanes 0 and 2
+        if CTE > 5.0:
+            CTE = 5.0
+        if CTE <-5.0:
+            CTE = -5.0       
+        
         return CTE
 
 if __name__ == '__main__':
