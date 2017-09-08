@@ -12,7 +12,7 @@ import numpy as np
 import rospy
 
 MPH2MPS       = 0.44704  # Conversion miles per hour to meters per second
-DEBUG         = False     # True = Print Statements appear in Terminal with Debug info
+DEBUG         = False    # True = Print Statements appear in Terminal with Debug info
 
 '''
 You can build this node only after you have built (or partially built) the `waypoint_updater` node.
@@ -88,9 +88,9 @@ class DBWNode(object):
                 dbw_status                = self.dbw_enabled
                 dbw_status                = True # TODO: Hack, DBW is always false for some reason need to fix this...  
                 if DEBUG:
-                    #print('DBW NODE :: Vel Err          ', proposed_linear_velocity-current_linear_velocity)
+                    print('DBW NODE :: Vel Err          ', proposed_linear_velocity-current_linear_velocity)
                     print('DBW NODE :: CTE              ', self.CTE)
-                    #print('DBW NODE :: DBW_STATUS       ', self.dbw_enabled)
+                    print('DBW NODE :: DBW_STATUS       ', self.dbw_enabled)
                 
                 throttle, brake, steering = self.controller.control(proposed_linear_velocity,
                                                                     proposed_angular_velocity,
@@ -148,10 +148,6 @@ class DBWNode(object):
         
         roll,pitch,yaw = tf.transformations.euler_from_quaternion([self.current_orient.x,self.current_orient.y,self.current_orient.z,self.current_orient.w])
         yaw = -1.*yaw # TODO: Need to invert the sign of yaw for things to work, not clear why
-        #yaw in radians
-        
-        if DEBUG:
-            print('DBW NODE :: YAW(deg)             ', yaw*180/math.pi)
         
         x_car_body = []
         y_car_body = []
@@ -165,10 +161,6 @@ class DBWNode(object):
             
             x_car_body.append(temp1)
             y_car_body.append(temp2)
-            
-            if DEBUG:
-                print('DBW NODE :: FIN_WPT X POS             ', temp1)
-                print('DBW NODE :: FIN_WPT Y POS             ', temp2)
         
         # As with MPC project, fit a 3rd order polynomial that fits most roads    
         coeff_3rd = np.polyfit(x_car_body,y_car_body,3)

@@ -34,9 +34,9 @@ class Controller(object):
             #throttle = self.LPFilt_Thr.filt(throttle)
             
             cte_steer = self.PIDCont_Str.step(cross_track_error,self.dt)
-            # TODO: Figure out how to use this properly
+            # TODO: Figure out how to use the yaw controller module properly
             pred_steer = self.YawCont_Str.get_steering(proposed_linear_velocity, proposed_angular_velocity, current_linear_velocity)
-            steer = cte_steer + pred_steer
+            steer = cte_steer #+ pred_steer
             steer = self.LPFilt_Str.filt(steer)
             
             # TODO: Figure out how to use the brakes

@@ -55,7 +55,6 @@ class WaypointUpdater(object):
         if self.waypoints != None:
             self.find_next_waypoint()
             self.final_wpts = Lane()
-            
             if DEBUG:
                 print('WAYPOINT UPDATER :: WPT Ahead ',"x: ",self.wpt_ahead.pose.pose.position.x,"y: ",self.wpt_ahead.pose.pose.position.y,"idx: ",self.wpt_ahead_idx)
             #Form final waypoint list from starting waypoint to waypoints ahead
@@ -109,15 +108,13 @@ class WaypointUpdater(object):
         closestlen = 9999999
         for idx,wpt in enumerate(self.waypoints):
             dist = self.distance_wpt2curr(wpt)
-            brg  = self.bearing_wpt2curr(wpt)
-            if dist < closestlen and brg > 0:
+            brg= self.bearing_wpt2curr(wpt)
+            #if dist < closestlen and (math.pi/2-brg) < math.pi/4: #check if waypoint is directly ahead within some window
+            if dist < closestlen and brg > 0.0:
                 self.wpt_ahead     = wpt
                 self.wpt_ahead_idx = idx
                 closestlen         = dist
                 stored_brg         = brg
-        #print("WAYPOINT UPDATER :: del_y   ",self.del_y)
-        #print("WAYPOINT UPDATER :: del_x   ",self.del_x)
-        #print("WAYPOINT UPDATER :: Bearing ",stored_brg)
         pass
     
     # When a message is recieved from /base_waypoints topic store it
@@ -137,12 +134,17 @@ class WaypointUpdater(object):
         
         roll,pitch,yaw = tf.transformations.euler_from_quaternion([self.current_orient.x,self.current_orient.y,self.current_orient.z,self.current_orient.w])
         yaw = -1.*yaw # TODO: Need to invert the sign of yaw for things to work, not clear why
+        
+        self.shiftx = wpt.pose.pose.position.x - global_car_x
+        self.shifty = wpt.pose.pose.position.y - global_car_y
             
-        self.del_y =  (wpt.pose.pose.position.x - global_car_x)*math.cos(yaw) - (wpt.pose.pose.position.y - global_car_y)*math.sin(yaw)
-        self.del_x =  (wpt.pose.pose.position.x - global_car_x)*math.sin(yaw) + (wpt.pose.pose.position.y - global_car_y)*math.cos(yaw)  
+        self.del_x =  (self.shiftx)*math.cos(yaw) - (self.shifty)*math.sin(yaw)
+        self.del_y =  (self.shiftx)*math.sin(yaw) + (self.shifty)*math.cos(yaw)  
             
-        bearing = math.atan2(self.del_y,self.del_x)
-        return bearing    
+        #bearing = math.atan2(self.del_y,self.del_x)
+        bearing = math.atan2(self.del_x,self.del_y) # x and y are flipped, with yaw=0, x increases while y remains same
+
+        return bearing
         
     # Find the distance between 2 waypoints    
     def distance(self, waypoints, wp1, wp2):
