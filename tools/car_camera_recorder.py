@@ -12,12 +12,13 @@ fourcc = cv2.VideoWriter_fourcc(*'XVID')
 out = cv2.VideoWriter('output.avi',fourcc, 20.0, (800,600))
 
 def image_callback(msg):
-    #print("Received an image!")
-    #print(msg.encoding)
-    #print(msg.height)
-    #print(msg.width)
+    print("Received an image!")
+    print(msg.encoding)
+    print(msg.height)
+    print(msg.width)
     try:
         img = bridge.imgmsg_to_cv2(msg, "8UC3")
+	img = cv2.cvtColor(img,cv2.COLOR_BGR2RGB)
     except CvBridgeError, e:
         print(e)
     else:
@@ -29,7 +30,7 @@ def main():
     rospy.init_node('image_listener')
 
     print("Subscribing to Camera Topic...")
-    image_topic = "/camera/image_raw"
+    image_topic = "/image_color"
     rospy.Subscriber(image_topic, Image, image_callback)
 
     print("Recording Car Camera to Output video...")
