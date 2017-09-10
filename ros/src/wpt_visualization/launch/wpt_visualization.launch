@@ -1,0 +1,4 @@
+<?xml version="1.0"?>
+<launch>
+    <node pkg="wpt_visualization" type="wpt_visualization.py" name="wpt_visualization" output="screen"/>
+</launch>
