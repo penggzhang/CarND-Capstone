@@ -1,0 +1,7 @@
+<?xml version="1.0"?>
+<launch>
+   
+    <!--Waypoint Visualization Node -->
+    <include file="$(find wpt_visualization)/launch/wpt_visualization.launch"/>
+    
+</launch>

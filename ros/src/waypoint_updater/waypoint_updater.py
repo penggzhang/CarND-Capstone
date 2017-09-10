@@ -37,6 +37,7 @@ class WaypointUpdater(object):
         # TODO: Add a subscriber for /traffic_waypoint and /obstacle_waypoint below
 
         self.final_waypoints_pub = rospy.Publisher('final_waypoints', Lane, queue_size=1)
+        self.debug_currentpos_pub= rospy.Publisher('debug_current_pose', PoseStamped, queue_size=1)
 
         # TODO: Add other member variables you need below
         self.pos_x          = 0.0
@@ -75,6 +76,14 @@ class WaypointUpdater(object):
             self.final_wpts.header.frame_id = FRAME_ID
             #Publish final waypoints
             self.final_waypoints_pub.publish(self.final_wpts)
+            #Topics to publish for debugging
+            self.debug_currpos = PoseStamped()
+            self.debug_currpos.header.stamp     = rospy.Time.now()
+            self.debug_currpos.pose.position.x  = self.pos_x
+            self.debug_currpos.pose.position.y  = self.pos_y
+            self.debug_currpos.pose.position.z  = self.pos_z
+            self.debug_currpos.pose.orientation = self.current_orient
+            self.debug_currentpos_pub.publish(self.debug_currpos)
         pass
 
     def pose_cb(self, msg):
