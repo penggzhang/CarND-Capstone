@@ -13,7 +13,7 @@ import rospy
 
 MPH2MPS       = 0.44704  # Conversion miles per hour to meters per second
 RAD2DEG       = 57.2958  # radians to degrees (180/pi)
-DEBUG         = True    # True = Print Statements appear in Terminal with Debug info
+DEBUG         = False    # True = Print Statements appear in Terminal with Debug info
 
 '''
 You can build this node only after you have built (or partially built) the `waypoint_updater` node.
@@ -99,6 +99,7 @@ class DBWNode(object):
                                                                     proposed_angular_velocity,
                                                                     current_linear_velocity,
                                                                     self.CTE,
+                                                                    self.heading_err,
                                                                     dbw_status)
                                                                     
                 if dbw_status:
@@ -171,6 +172,18 @@ class DBWNode(object):
         # TODO: take the derivative of the curve fit, to determine heading
         # slope = 3*coeff_3rd[0]*x*x + 2*coeff_3rd[1]*x + coeff_3rd[2]
         # at x = 0.0 simplifies to
+
+        # QUESTION: should we really use the heading at x = 0.0 here,
+        # or look at some future point along the curve?
+
+        # NOTE: Heading error is not actually equal to angular velocity
+        # This seems to perform ok, but is not strictly correct
+        
+        # Refer to Advanced Lane Finding : Measuring Curvature
+        # The actual angular velocity that should be used in the yaw controller
+        # is V / r (linear velocity divided curve radius)
+        # Curve radius can be computed as (((1 + dx/dy)^2)^(3/2))/abs(d2x/dy2)
+        
         slope = coeff_3rd[2]
 
         # Error between current heading and fitted heading at x = 0.0
