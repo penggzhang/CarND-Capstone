@@ -149,10 +149,11 @@ class WaypointUpdater(object):
         self.shifty = wpt.pose.pose.position.y - global_car_y
 
         # updated equations (specifically + and -) to fix atan2 function
-        self.del_x =  (self.shiftx)*math.cos(yaw) + (self.shifty)*math.sin(yaw)
-        self.del_y =  -(self.shiftx)*math.sin(yaw) + (self.shifty)*math.cos(yaw)  
-            
-        bearing = math.atan2(self.del_y,self.del_x) 
+        self.del_x =  (self.shiftx)*math.cos(yaw) - (self.shifty)*math.sin(yaw)
+        self.del_y =  (self.shiftx)*math.sin(yaw) + (self.shifty)*math.cos(yaw)  
+
+        # bearing = math.atan2(self.del_x,self.del_y)    
+        bearing = math.atan2(self.del_x,self.del_y) # x and y swapped per Notes.pptx
         return bearing
         
     # Find the distance between 2 waypoints    

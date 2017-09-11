@@ -12,7 +12,8 @@ import numpy as np
 import rospy
 
 MPH2MPS       = 0.44704  # Conversion miles per hour to meters per second
-DEBUG         = False    # True = Print Statements appear in Terminal with Debug info
+RAD2DEG       = 57.2958  # radians to degrees (180/pi)
+DEBUG         = True    # True = Print Statements appear in Terminal with Debug info
 
 '''
 You can build this node only after you have built (or partially built) the `waypoint_updater` node.
@@ -74,6 +75,7 @@ class DBWNode(object):
         self.current_orient   = None #
         self.twist_cmd        = None # TwistCmd         - Units (?)
         self.CTE              = 0.0  # Cross Track Error
+        self.heading_err      = 0.0  # heading error, in radians
 
         self.loop()
 
@@ -81,15 +83,16 @@ class DBWNode(object):
         rate = rospy.Rate(10)
         while not rospy.is_shutdown():
             if self.finalwpts != None and self.current_velocity != None:
-                proposed_linear_velocity  = self.twist_cmd.linear.x #self.finalwpts[0].twist.twist.linear.x
-                proposed_angular_velocity = self.twist_cmd.angular.z
-                current_linear_velocity   = self.current_velocity.linear.x
-                self.CTE                  = self.Compute_CTE()
-                dbw_status                = self.dbw_enabled
-                dbw_status                = True # TODO: Hack, DBW is always false for some reason need to fix this...  
+                proposed_linear_velocity   = self.twist_cmd.linear.x #self.finalwpts[0].twist.twist.linear.x
+                proposed_angular_velocity  = self.twist_cmd.angular.z
+                current_linear_velocity    = self.current_velocity.linear.x
+                self.CTE, self.heading_err = self.Compute_CTE()
+                dbw_status                 = self.dbw_enabled
+                dbw_status                 = True # TODO: Hack, DBW is always false for some reason need to fix this...  
                 if DEBUG:
                     print('DBW NODE :: Vel Err          ', proposed_linear_velocity-current_linear_velocity)
                     print('DBW NODE :: CTE              ', self.CTE)
+                    print('DBW NODE :: Heading Err      ', (self.heading_err*RAD2DEG)) # heading error in degrees
                     print('DBW NODE :: DBW_STATUS       ', self.dbw_enabled)
                 
                 throttle, brake, steering = self.controller.control(proposed_linear_velocity,
@@ -164,15 +167,30 @@ class DBWNode(object):
         
         # As with MPC project, fit a 3rd order polynomial that fits most roads    
         coeff_3rd = np.polyfit(x_car_body,y_car_body,3)
+
+        # TODO: take the derivative of the curve fit, to determine heading
+        # slope = 3*coeff_3rd[0]*x*x + 2*coeff_3rd[1]*x + coeff_3rd[2]
+        # at x = 0.0 simplifies to
+        slope = coeff_3rd[2]
+
+        # Error between current heading and fitted heading at x = 0.0
+        heading_err = math.atan2(slope, 1.0)
+
+        # Limit to +/- 90 degrees?
+        if heading_err > (math.pi/2):
+            heading_err = math.pi/2 
+        if heading_err < -(math.pi/2):
+            heading_err = -(math.pi/2)
+        
         CTE       = np.polyval(coeff_3rd,0.0)
         
         #Limit CTE to +/-5 which is empirically the limits of the lanes 0 and 2
         if CTE > 5.0:
             CTE = 5.0
-        if CTE <-5.0:
+        if CTE < -5.0:
             CTE = -5.0       
         
-        return CTE
+        return CTE, heading_err
 
 if __name__ == '__main__':
     DBWNode()
