@@ -144,16 +144,15 @@ class WaypointUpdater(object):
         roll,pitch,yaw = tf.transformations.euler_from_quaternion([self.current_orient.x,self.current_orient.y,self.current_orient.z,self.current_orient.w])
         yaw = -1.*yaw # TODO: Need to invert the sign of yaw for things to work, not clear why
         # www.chrobotics.com/library/understanding-quaternions shows Y as pointing to the right in Quaternions
-        
+
         self.shiftx = wpt.pose.pose.position.x - global_car_x
         self.shifty = wpt.pose.pose.position.y - global_car_y
-            
-        self.del_x =  (self.shiftx)*math.cos(yaw) - (self.shifty)*math.sin(yaw)
-        self.del_y =  (self.shiftx)*math.sin(yaw) + (self.shifty)*math.cos(yaw)  
-            
-        #bearing = math.atan2(self.del_y,self.del_x)
-        bearing = math.atan2(self.del_x,self.del_y) # x and y are flipped, with yaw=0, x increases while y remains same
 
+        # updated equations (specifically + and -) to fix atan2 function
+        self.del_x =  (self.shiftx)*math.cos(yaw) + (self.shifty)*math.sin(yaw)
+        self.del_y =  -(self.shiftx)*math.sin(yaw) + (self.shifty)*math.cos(yaw)  
+            
+        bearing = math.atan2(self.del_y,self.del_x) 
         return bearing
         
     # Find the distance between 2 waypoints    
