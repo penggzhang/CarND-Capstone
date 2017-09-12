@@ -10,6 +10,7 @@ from light_classification.tl_classifier import TLClassifier
 import tf
 import cv2
 import yaml
+import sys
 
 STATE_COUNT_THRESHOLD = 3
 
@@ -90,6 +91,26 @@ class TLDetector(object):
             self.upcoming_red_light_pub.publish(Int32(self.last_wp))
         self.state_count += 1
 
+
+    def get_distance_waypoint_to_pose(self, waypoint, pose):
+        """Calculate the distance between the waypoint and the pose
+
+        Args:
+            waypoint (Pose): waypoint
+            pose     (Pose): position to match a waypoint to
+
+        Returns:
+            float: distance between waypoint and pose
+
+        """
+
+        diff_x = waypoint.x - pose.x
+        diff_y = waypoint.y - pose.y
+        diff_z = waypoint.z - pose.z
+
+        return diff_x*diff_x + diff_y*diff_y + diff_z*diff_z
+
+
     def get_closest_waypoint(self, pose):
         """Identifies the closest path waypoint to the given position
             https://en.wikipedia.org/wiki/Closest_pair_of_points_problem
@@ -100,8 +121,22 @@ class TLDetector(object):
             int: index of the closest waypoint in self.waypoints
 
         """
-        #TODO implement
-        return 0
+
+        # Brute Force Searching (TODO: Try to reduce the number of operations by using divide and conquer)
+        # http://rosettacode.org/wiki/Closest-pair_problem#Python
+        min_distance           = sys.maxsize
+        nearest_waypoint_index = -1
+
+        if self.waypoints != None:
+            for i in range(0, len(self.waypoints.waypoints)):
+                waypoint  = self.waypoints.waypoints[i].pose.pose.position
+                posepoint = pose.position
+                distance = self.get_distance_waypoint_to_pose(waypoint, posepoint)
+                if distance < min_distance:
+                    min_distance = distance
+                    nearest_waypoint_index = i
+
+        return nearest_waypoint_index
 
 
     def project_to_image_plane(self, point_in_world):
@@ -125,18 +160,33 @@ class TLDetector(object):
         trans = None
         try:
             now = rospy.Time.now()
-            self.listener.waitForTransform("/base_link",
-                  "/world", now, rospy.Duration(1.0))
-            (trans, rot) = self.listener.lookupTransform("/base_link",
-                  "/world", now)
+            self.listener.waitForTransform("/base_link", "/world", now, rospy.Duration(1.0))
+            (trans, rot) = self.listener.lookupTransform("/base_link", "/world", now)
 
         except (tf.Exception, tf.LookupException, tf.ConnectivityException):
             rospy.logerr("Failed to find camera to map transform")
 
-        #TODO Use tranform and rotation to calculate 2D position of light in image
+        #### Use tranform and rotation to calculate 2D position of light in image
+        # http://docs.ros.org/jade/api/tf/html/c++/classtf_1_1Transformer.html
+        # https://w3.cs.jmu.edu/spragunr/CS354_S14/labs/tf_lab/html/tf.listener.TransformerROS-class.html
+        # http://www.cse.psu.edu/~rtc12/CSE486/lecture12.pdf
+        # https://stackoverflow.com/questions/5288536/how-to-change-3d-point-to-2d-pixel-location?rq=1
+        # ex. trans = [-1230.0457257142773, -1080.1731777599543, -0.10696510000000001]
+        # ex. rot   = [0.0, 0.0, -0.0436201197059201, 0.9990481896069084]
+        # ex. matrix = [[  9.96194570e-01   8.71572032e-02   0.00000000e+00  -1.23004573e+03]
+        #               [ -8.71572032e-02   9.96194570e-01   0.00000000e+00  -1.08017318e+03]
+        #               [  0.00000000e+00   0.00000000e+00   1.00000000e+00  -1.06965100e-01]
+        #               [  0.00000000e+00   0.00000000e+00   0.00000000e+00   1.00000000e+00]]
+        
+        #### Forward Projection
+        # World to Camera Transformation (Rigid transformation = rotation + translation)
+        transformation_matrix = self.listener.fromTranslationRotation(trans, rot)
+        point_in_world_vector = np.array([[point_in_world.x], [point_in_world.y], [point_in_world.z], [1.0]], dtype=float)
+        camera_point = np.dot(transformation_matrix, point_in_world_vector)
 
-        x = 0
-        y = 0
+        # Perspective Correction
+        x = fx * camera_point.x / camera_point.z
+        y = fy * camera_point.y / camera_point.z
 
         return (x, y)
 
