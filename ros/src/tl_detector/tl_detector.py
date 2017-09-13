@@ -60,6 +60,7 @@ class TLDetector(object):
 
     def traffic_cb(self, msg):
         self.lights = msg.lights
+        self.all_lights_wps = self.get_all_lights_wps(self.lights)
 
     def image_cb(self, msg):
         """Identifies red lights in the incoming camera image and publishes the index
@@ -139,6 +140,25 @@ class TLDetector(object):
         return nearest_waypoint_index
 
 
+    def get_all_lights_wps(self, lights):
+        """Find the nearest waypoint for each light
+
+        Args:
+            lights ([TrafficLight]): list of all traffic lights
+
+        Returns:
+            all_lights_wps: list of waypoint indices
+
+        """
+        all_lights_wps = []
+
+        for i in range(len(lights)):
+            light_wp = get_closest_waypoint(lights[i].pose.pose)
+            all_lights_wps.append(light_wp)
+
+        return all_lights_wps
+
+
     def project_to_image_plane(self, point_in_world):
         """Project point from 3D world coordinates to 2D camera image location
 
@@ -169,7 +189,9 @@ class TLDetector(object):
         #### Use tranform and rotation to calculate 2D position of light in image
         # http://docs.ros.org/jade/api/tf/html/c++/classtf_1_1Transformer.html
         # https://w3.cs.jmu.edu/spragunr/CS354_S14/labs/tf_lab/html/tf.listener.TransformerROS-class.html
+        # http://wiki.ros.org/tf/TfUsingPython
         # http://www.cse.psu.edu/~rtc12/CSE486/lecture12.pdf
+        # http://www.cse.psu.edu/~rtc12/CSE486/lecture13.pdf
         # https://stackoverflow.com/questions/5288536/how-to-change-3d-point-to-2d-pixel-location?rq=1
         # ex. trans = [-1230.0457257142773, -1080.1731777599543, -0.10696510000000001]
         # ex. rot   = [0.0, 0.0, -0.0436201197059201, 0.9990481896069084]
@@ -228,6 +250,7 @@ class TLDetector(object):
             car_position = self.get_closest_waypoint(self.pose.pose)
 
         #TODO find the closest visible traffic light (if one exists)
+
 
         if light:
             state = self.get_light_state(light)
