@@ -23,6 +23,8 @@ class TLDetector(object):
         self.camera_image = None
         self.lights = []
 
+	self.all_light_wps = None
+
         sub1 = rospy.Subscriber('/current_pose', PoseStamped, self.pose_cb)
         sub2 = rospy.Subscriber('/base_waypoints', Lane, self.waypoints_cb)
 
@@ -57,9 +59,6 @@ class TLDetector(object):
 
     def waypoints_cb(self, waypoints):
         self.waypoints = waypoints
-
-        #Find the closest waypoint for each traffic light
-        self.all_light_wps = self.get_all_light_wps(self.config['light_positions'])
 
     def traffic_cb(self, msg):
         self.lights = msg.lights
@@ -150,8 +149,8 @@ class TLDetector(object):
         nearest_waypoint_index = -1
 
         if self.waypoints != None:
-            for i in range(0, len(self.waypoints.waypoints)):
-                waypoint  = (self.waypoints.waypoints[i]).pose.pose
+	    for i in range(0, len(self.waypoints.waypoints)):
+		waypoint  = self.waypoints.waypoints[i].pose.pose
                 posepoint = pose
                 distance = self.get_distance_btw_two_poses(waypoint, posepoint)
                 if distance < min_distance:
@@ -181,7 +180,7 @@ class TLDetector(object):
             wp = self.get_closest_waypoint(pose)
             all_light_wps.append(wp)
 
-        #rospy.loginfo("Waypoint indices of all lights: %s", all_light_wps)
+        rospy.loginfo("Waypoint indices of all lights: %s", all_light_wps)
 
         return all_light_wps
 
@@ -278,7 +277,9 @@ class TLDetector(object):
 
         #TODO find the closest visible traffic light (if one exists)
 
-        
+        #Find the closest waypoint for each traffic light
+	if self.all_light_wps == None and self.waypoints != None:
+            self.all_light_wps = self.get_all_light_wps(self.config['light_positions'])
 
         if light:
             state = self.get_light_state(light)
