@@ -58,9 +58,11 @@ class TLDetector(object):
     def waypoints_cb(self, waypoints):
         self.waypoints = waypoints
 
+        #Find the closest waypoint for each traffic light
+        self.all_light_wps = self.get_all_light_wps(self.config['light_positions'])
+
     def traffic_cb(self, msg):
         self.lights = msg.lights
-        self.all_lights_wps = self.get_all_lights_wps(self.lights)
 
     def image_cb(self, msg):
         """Identifies red lights in the incoming camera image and publishes the index
@@ -112,6 +114,25 @@ class TLDetector(object):
         return diff_x*diff_x + diff_y*diff_y + diff_z*diff_z
 
 
+    def get_distance_btw_two_poses(self, pose_1, pose_2):
+        """Calculate the distance between two poses
+
+        Args:
+            pose_1 (Pose): pose of 1st point
+            pose_2 (Pose): pose of 2nd point
+
+        Returns:
+            float: distance between two poses
+
+        """
+
+        diff_x = pose_1.position.x - pose_2.position.x
+        diff_y = pose_1.position.y - pose_2.position.y
+        diff_z = pose_1.position.z - pose_2.position.z
+
+        return diff_x*diff_x + diff_y*diff_y + diff_z*diff_z
+
+
     def get_closest_waypoint(self, pose):
         """Identifies the closest path waypoint to the given position
             https://en.wikipedia.org/wiki/Closest_pair_of_points_problem
@@ -130,9 +151,9 @@ class TLDetector(object):
 
         if self.waypoints != None:
             for i in range(0, len(self.waypoints.waypoints)):
-                waypoint  = self.waypoints.waypoints[i].pose.pose.position
-                posepoint = pose.position
-                distance = self.get_distance_waypoint_to_pose(waypoint, posepoint)
+                waypoint  = (self.waypoints.waypoints[i]).pose.pose
+                posepoint = pose
+                distance = self.get_distance_btw_two_poses(waypoint, posepoint)
                 if distance < min_distance:
                     min_distance = distance
                     nearest_waypoint_index = i
@@ -140,23 +161,29 @@ class TLDetector(object):
         return nearest_waypoint_index
 
 
-    def get_all_lights_wps(self, lights):
-        """Find the nearest waypoint for each light
+    def get_all_light_wps(self, light_positions):
+        """Find the closest waypoint for each traffic light
 
         Args:
-            lights ([TrafficLight]): list of all traffic lights
+            light_positions: list of 2D (x, y) position of all traffic lights
 
         Returns:
-            all_lights_wps: list of waypoint indices
+            all_light_wps: list of waypoint indices
 
         """
-        all_lights_wps = []
+        all_light_wps = []
+        pose = Pose()
 
-        for i in range(len(lights)):
-            light_wp = get_closest_waypoint(lights[i].pose.pose)
-            all_lights_wps.append(light_wp)
+        for i in range(len(light_positions)):
+            pose.position.x = light_positions[i][0]
+            pose.position.y = light_positions[i][1]
 
-        return all_lights_wps
+            wp = self.get_closest_waypoint(pose)
+            all_light_wps.append(wp)
+
+        #rospy.loginfo("Waypoint indices of all lights: %s", all_light_wps)
+
+        return all_light_wps
 
 
     def project_to_image_plane(self, point_in_world):
@@ -251,6 +278,7 @@ class TLDetector(object):
 
         #TODO find the closest visible traffic light (if one exists)
 
+        
 
         if light:
             state = self.get_light_state(light)
