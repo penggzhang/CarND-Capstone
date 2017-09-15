@@ -11,8 +11,11 @@ import tf
 import cv2
 import yaml
 import sys
+import math
 
 STATE_COUNT_THRESHOLD = 3
+
+VISIBLE_DISTANCE = 300
 
 class TLDetector(object):
     def __init__(self):
@@ -113,7 +116,7 @@ class TLDetector(object):
         diff_y = waypoint.y - pose.y
         diff_z = waypoint.z - pose.z
 
-        return diff_x*diff_x + diff_y*diff_y + diff_z*diff_z
+        return math.sqrt(diff_x*diff_x + diff_y*diff_y + diff_z*diff_z)
 
 
     def get_distance_btw_two_poses(self, pose_1, pose_2):
@@ -132,7 +135,7 @@ class TLDetector(object):
         diff_y = pose_1.position.y - pose_2.position.y
         diff_z = pose_1.position.z - pose_2.position.z
 
-        return diff_x*diff_x + diff_y*diff_y + diff_z*diff_z
+        return math.sqrt(diff_x*diff_x + diff_y*diff_y + diff_z*diff_z)
 
 
     def get_closest_waypoint(self, pose):
@@ -273,6 +276,7 @@ class TLDetector(object):
 
         Returns: 
             int: the waypoint index of the upcoming light
+            int: the index of the upcoming light in [lights] 
 
         """
         #Find the interval in which the car is
@@ -286,11 +290,12 @@ class TLDetector(object):
                     break
         #rospy.loginfo("interval: %s", interval)
 
-        #Find the upcoming light waypoint
+        #Find the upcoming light waypoint and index
         #Note: only go one way along an ascending sequence of waypoints
         light_wp = all_light_wps[interval]
+        light_id = interval
 
-        return light_wp
+        return light_wp, light_id
 
 
     def process_traffic_lights(self):
@@ -315,14 +320,27 @@ class TLDetector(object):
         if self.all_light_wps == None and self.waypoints != None:
             self.all_light_wps = self.get_all_light_wps(self.config['light_positions'])
 
-        #Find the waypoint of the upcoming light
+        #Find the waypoint and index of the upcoming light
         if self.all_light_wps != None and self.car_position != None:
-            light_wp = self.get_upcoming_light_wp(self.car_position, self.all_light_wps)
-            #rospy.loginfo("Upcoming light waypoint: %s", light_wp)
+            light_wp, light_id = self.get_upcoming_light_wp(self.car_position, self.all_light_wps)
+            #rospy.loginfo("Upcoming light waypoint and index: %s, %s", light_wp, light_id)
 
-        if light:
-            state = self.get_light_state(light)
-            return light_wp, state
+            #Find the distance from the car to the upcoming light
+            if self.lights != None and self.pose != None:
+                light = self.lights[light_id]
+                distance_to_light = self.get_distance_btw_two_poses(self.pose.pose, light.pose.pose)
+                #rospy.loginfo("Distance to upcoming light: %s", distance_to_light)
+                
+                #If the car is farther than a pre-set visible distance,
+                #then return -1 for light waypoint and UNKNOWN for light state.
+                #Otherwise, proceed to recognize the light state.
+                if distance_to_light > VISIBLE_DISTANCE:
+                    return -1, TrafficLight.UNKNOWN
+                else:
+                    #state = self.get_light_state(light)
+                    #return light_wp, state
+                    return -1, TrafficLight.UNKNOWN
+            
         self.waypoints = None
         return -1, TrafficLight.UNKNOWN
 
