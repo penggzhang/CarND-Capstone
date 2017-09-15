@@ -52,6 +52,9 @@ class TLDetector(object):
         self.last_wp = -1
         self.state_count = 0
 
+        #The closest waypoint to car
+        self.car_position = None
+
         rospy.spin()
 
     def pose_cb(self, msg):
@@ -147,6 +150,7 @@ class TLDetector(object):
         # http://rosettacode.org/wiki/Closest-pair_problem#Python
         min_distance           = sys.maxsize
         nearest_waypoint_index = -1
+        #rospy.loginfo("Type of self.waypoints: %s", type(self.waypoints))
 
         if self.waypoints != None:
             for i in range(0, len(self.waypoints.waypoints)):
@@ -260,6 +264,35 @@ class TLDetector(object):
         #Get classification
         return self.light_classifier.get_classification(cv_image)
 
+    def get_upcoming_light_wp(self, car_position, all_light_wps):
+        """Find the waypoint of the upcoming light
+
+        Args:
+            car_position    (Int): the closest waypoint to the car
+            all_light_wps ([Int]): list of the closest waypoint for each light
+
+        Returns: 
+            int: the waypoint index of the upcoming light
+
+        """
+        #Find the interval in which the car is
+        interval = 0
+        if car_position == 0:
+            pass
+        else:
+            for i in range(len(all_light_wps)):
+                if car_position <= all_light_wps[i]:
+                    interval = i
+                    break
+        #rospy.loginfo("interval: %s", interval)
+
+        #Find the upcoming light waypoint
+        #Note: only go one way along an ascending sequence of waypoints
+        light_wp = all_light_wps[interval]
+
+        return light_wp
+
+
     def process_traffic_lights(self):
         """Finds closest visible traffic light, if one exists, and determines its
             location and color
@@ -272,13 +305,20 @@ class TLDetector(object):
         light = None
         light_positions = self.config['light_positions']
         if(self.pose):
-            car_position = self.get_closest_waypoint(self.pose.pose)
+            position_tmp = self.get_closest_waypoint(self.pose.pose)
+            if position_tmp != -1:
+                self.car_position = position_tmp
 
         #TODO find the closest visible traffic light (if one exists)
 
         #Find the closest waypoint for each traffic light
         if self.all_light_wps == None and self.waypoints != None:
             self.all_light_wps = self.get_all_light_wps(self.config['light_positions'])
+
+        #Find the waypoint of the upcoming light
+        if self.all_light_wps != None and self.car_position != None:
+            light_wp = self.get_upcoming_light_wp(self.car_position, self.all_light_wps)
+            #rospy.loginfo("Upcoming light waypoint: %s", light_wp)
 
         if light:
             state = self.get_light_state(light)
