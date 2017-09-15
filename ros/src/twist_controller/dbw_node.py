@@ -17,25 +17,19 @@ DEBUG         = False    # True = Print Statements appear in Terminal with Debug
 
 '''
 You can build this node only after you have built (or partially built) the `waypoint_updater` node.
-
 You will subscribe to `/twist_cmd` message which provides the proposed linear and angular velocities.
 You can subscribe to any other message that you find important or refer to the document for list
 of messages subscribed to by the reference implementation of this node.
-
 One thing to keep in mind while building this node and the `twist_controller` class is the status
 of `dbw_enabled`. While in the simulator, its enabled all the time, in the real car, that will
 not be the case. This may cause your PID controller to accumulate error because the car could
 temporarily be driven by a human instead of your controller.
-
 We have provided two launch files with this node. Vehicle specific values (like vehicle_mass,
 wheel_base) etc should not be altered in these files.
-
 We have also provided some reference implementations for PID controller and other utility classes.
 You are free to use them or build your own.
-
 Once you have the proposed throttle, brake, and steer values, publish it on the various publishers
 that we have created in the `__init__` function.
-
 '''
 
 class DBWNode(object):
@@ -76,6 +70,11 @@ class DBWNode(object):
         self.twist_cmd        = None # TwistCmd         - Units (?)
         self.CTE              = 0.0  # Cross Track Error
         self.heading_err      = 0.0  # heading error, in radians
+        
+        # store previous pass of throttle, steering and brake to reduce latency
+        self.throttle_prev    = 0.0
+        self.steer_prev       = 0.0
+        self.brake_prev       = 0.0
 
         self.loop()
 
@@ -83,23 +82,23 @@ class DBWNode(object):
         rate = rospy.Rate(10)
         while not rospy.is_shutdown():
             if self.finalwpts != None and self.current_velocity != None:
-                proposed_linear_velocity   = self.twist_cmd.linear.x #self.finalwpts[0].twist.twist.linear.x
+                proposed_linear_velocity   = self.twist_cmd.linear.x
                 proposed_angular_velocity  = self.twist_cmd.angular.z
                 current_linear_velocity    = self.current_velocity.linear.x
                 self.CTE, self.heading_err = self.Compute_CTE()
-                dbw_status                 = self.dbw_enabled
-                dbw_status                 = True # TODO: Hack, DBW is always false for some reason need to fix this...  
+                dbw_status                 = self.dbw_enabled 
                 if DEBUG:
-                    print('DBW NODE :: Vel Err          ', proposed_linear_velocity-current_linear_velocity)
-                    print('DBW NODE :: CTE              ', self.CTE)
-                    print('DBW NODE :: Heading Err      ', (self.heading_err*RAD2DEG)) # heading error in degrees
-                    print('DBW NODE :: DBW_STATUS       ', self.dbw_enabled)
+                    print('DBW NODE :: Vel Err             ', proposed_linear_velocity-current_linear_velocity)
+                    print('DBW NODE :: CTE                 ', self.CTE)
+                    print('DBW NODE :: Heading Err         ', (self.heading_err*RAD2DEG)) # heading error in degrees
+                    print('DBW NODE :: Pure Pursuit AngVel ', proposed_angular_velocity)
+                    print('DBW NODE :: DBW_STATUS          ', self.dbw_enabled)
                 
                 throttle, brake, steering = self.controller.control(proposed_linear_velocity,
                                                                     proposed_angular_velocity,
                                                                     current_linear_velocity,
                                                                     self.CTE,
-                                                                    self.heading_err,
+                                                                    proposed_angular_velocity,
                                                                     dbw_status)
                                                                     
                 if dbw_status:
@@ -111,20 +110,23 @@ class DBWNode(object):
         tcmd.enable = True
         tcmd.pedal_cmd_type = ThrottleCmd.CMD_PERCENT
         tcmd.pedal_cmd = throttle
-        self.throttle_pub.publish(tcmd)
+        if self.throttle_prev != throttle:
+            self.throttle_pub.publish(tcmd)
         #print('DBW NODE :: Throttle Command ',throttle)
 
         scmd = SteeringCmd()
         scmd.enable = True
         scmd.steering_wheel_angle_cmd = steer
-        self.steer_pub.publish(scmd)
+        if self.steer_prev != steer:
+            self.steer_pub.publish(scmd)
         #print('DBW NODE :: Steering Command ',steer)
 
         bcmd = BrakeCmd()
         bcmd.enable = True
         bcmd.pedal_cmd_type = BrakeCmd.CMD_TORQUE
         bcmd.pedal_cmd = brake
-        self.brake_pub.publish(bcmd)
+        if self.brake_prev != brake:
+            self.brake_pub.publish(bcmd)
         #print('DBW NODE :: Brake Command ',brake)
         
     def finalwpts_cb(self, msg):

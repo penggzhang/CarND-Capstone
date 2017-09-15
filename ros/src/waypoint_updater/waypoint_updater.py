@@ -2,7 +2,7 @@
 
 import rospy
 from geometry_msgs.msg import PoseStamped
-from styx_msgs.msg import Lane, Waypoint
+from styx_msgs.msg import Lane, Waypoint, TrafficLightArray
 import tf
 import math
 
@@ -21,88 +21,134 @@ as well as to verify your TL classifier.
 TODO (for Yousuf and Aaron): Stopline location for each traffic light.
 '''
 
-LOOKAHEAD_WPS = 10      # Number of waypoints published
-SPEED_MPH     = 10      # Forward speed in miles per hour
-MPH2MPS       = 0.44704 # Conversion miles per hour to meters per second
-FRAME_ID      = 'WPT'   # ROS TF Frame ID of published waypoints
-DEBUG         = False   # True = Print Statements appear in Terminal with Debug info
-
+LOOKAHEAD_WPS = 30       # Number of waypoints published
+SPEED_MPH     = 20.      # Forward speed in miles per hour
+MPH2MPS       = 0.44704  # Conversion miles per hour to meters per second
+DEBUG         = False    # True = Print Statements appear in Terminal with Debug info
+DEBUG_TOPICS  = False    # Enable debug output topics
+SIMULATE_TL   = True     # True = Simulate traffic light positions with /vehicle/traffic_lights
 class WaypointUpdater(object):
     def __init__(self):
         rospy.init_node('waypoint_updater')
 
+        # Subscribers
         rospy.Subscriber('/current_pose', PoseStamped, self.pose_cb, queue_size=1)
         rospy.Subscriber('/base_waypoints', Lane, self.waypoints_cb, queue_size=1)
-
-        # TODO: Add a subscriber for /traffic_waypoint and /obstacle_waypoint below
-
+        if SIMULATE_TL:
+            rospy.Subscriber('/vehicle/traffic_lights', TrafficLightArray, self.sim_traffic_cb, queue_size=1)
+        
+        # Publishers
         self.final_waypoints_pub = rospy.Publisher('final_waypoints', Lane, queue_size=1)
-        self.debug_currentpos_pub= rospy.Publisher('debug_current_pose', PoseStamped, queue_size=1)
+        if DEBUG_TOPICS:
+            self.debug_currentpos_pub= rospy.Publisher('debug_current_pose', PoseStamped, queue_size=1)
 
-        # TODO: Add other member variables you need below
-        self.pos_x          = 0.0
-        self.pos_y          = 0.0
-        self.pos_z          = 0.0
-        self.waypoints      = None
-        self.wpt_ahead_idx  = 0       
-        self.wpt_ahead      = None
-        self.final_wpts     = None
-        self.current_orient = None
+        # Member Variables
+        self.pos_x            = 0.
+        self.pos_y            = 0.
+        self.pos_z            = 0.
+        self.waypoints        = None
+        self.wpt_ahead_idx    = 0.       
+        self.wpt_ahead        = None
+        self.final_wpts       = None
+        self.current_orient   = None
+        self.light_ahead      = None
+        self.target_speed_mps = SPEED_MPH*MPH2MPS
+        self.dist2light_m     = 9999.
 
         rospy.spin()
         
     def loop(self): 
-        # Fill the final waypoint list with all the waypoints ahead
         if self.waypoints != None:
             self.find_next_waypoint()
             self.final_wpts = Lane()
-            if DEBUG:
-                print('WAYPOINT UPDATER :: WPT Ahead ',"x: ",self.wpt_ahead.pose.pose.position.x,"y: ",self.wpt_ahead.pose.pose.position.y,"idx: ",self.wpt_ahead_idx)
+            if False:
+                print('WPT Ahead        ',"x: ",self.wpt_ahead.pose.pose.position.x,"y: ",self.wpt_ahead.pose.pose.position.y,"idx: ",self.wpt_ahead_idx)
+                print('WPT List Length: ', len(self.waypoints)) 
+            
             #Form final waypoint list from starting waypoint to waypoints ahead
             final_wpt_idx = self.wpt_ahead_idx+LOOKAHEAD_WPS
             if final_wpt_idx < len(self.waypoints):
                 self.final_wpts.waypoints = self.waypoints[self.wpt_ahead_idx:final_wpt_idx]
             else:
                 self.final_wpts.waypoints = self.waypoints[self.wpt_ahead_idx:len(self.waypoints)]
-            #Fill Speed
+
+            #Fill target speeds
             for wpt in self.final_wpts.waypoints:
-                wpt.twist.twist.linear.x = 20*MPH2MPS
-                wpt.twist.twist.linear.y = 0
-                wpt.twist.twist.linear.z = 0
-            if DEBUG:
-                print('WAYPOINT UPDATER :: Final WPT List Length: ', len(self.final_wpts.waypoints))    
-            #Fill Header
-            self.final_wpts.header.stamp    = rospy.Time.now()
-            self.final_wpts.header.frame_id = FRAME_ID
+                # If traffic light is ahead and we are not already in the middle of the lane
+                # Set target speed
+                if self.dist2light_m > 30 and self.dist2light_m < 50:
+                    self.target_speed_mps = 0.0
+                else:
+                    self.target_speed_mps = SPEED_MPH*MPH2MPS
+                    
+                wpt.twist.twist.linear.x = self.target_speed_mps
+                if False:
+                    print('WAYPOINT UPDATER :: wpt_ahead_idx:       ', self.wpt_ahead_idx) 
+                    print('WAYPOINT UPDATER :: wpt_light_ahead_idx: ', self.wpt_light_ahead_idx) 
+                    print('WAYPOINT UPDATER :: Target Speed:        ', self.target_speed_mps) 
+                    print('----------------------------------')   
+                    
             #Publish final waypoints
+            self.final_wpts.header.stamp    = rospy.Time.now()
             self.final_waypoints_pub.publish(self.final_wpts)
+            
             #Topics to publish for debugging
-            self.debug_currpos = PoseStamped()
-            self.debug_currpos.header.stamp     = rospy.Time.now()
-            self.debug_currpos.pose.position.x  = self.pos_x
-            self.debug_currpos.pose.position.y  = self.pos_y
-            self.debug_currpos.pose.position.z  = self.pos_z
-            self.debug_currpos.pose.orientation = self.current_orient
-            self.debug_currentpos_pub.publish(self.debug_currpos)
+            if DEBUG_TOPICS:
+                self.debug_currpos = PoseStamped()
+                self.debug_currpos.header.stamp     = rospy.Time.now()
+                self.debug_currpos.pose.position.x  = self.pos_x
+                self.debug_currpos.pose.position.y  = self.pos_y
+                self.debug_currpos.pose.position.z  = self.pos_z
+                self.debug_currpos.pose.orientation = self.current_orient
+                self.debug_currentpos_pub.publish(self.debug_currpos)
         pass
 
     def pose_cb(self, msg):
-        self.pos_x =msg.pose.position.x
-        self.pos_y =msg.pose.position.y
-        self.pos_z =msg.pose.position.z
+        self.pos_x          = msg.pose.position.x
+        self.pos_y          = msg.pose.position.y
+        self.pos_z          = msg.pose.position.z
         self.current_orient = msg.pose.orientation
-        if DEBUG:
-            print("WAYPOINT UPDATER :: Curr Pos  ","x: ",self.pos_x, "y: ", self.pos_y)
         self.loop();
+        
+        if False:
+            print("WAYPOINT UPDATER :: Curr Pos  ","x: ",self.pos_x, "y: ", self.pos_y)
         
         pass
 
-    def traffic_cb(self, msg):
-        # TODO: Callback for /traffic_waypoint message. Implement
-        pass
-
-    def obstacle_cb(self, msg):
-        # TODO: Callback for /obstacle_waypoint message. We will implement it later
+    def sim_traffic_cb(self, msg):
+    
+        #Find closest light ahead of us
+        closestlen = 9999999
+        if self.current_orient != None:
+            for idx,light in enumerate(msg.lights):
+                dist = self.distance_wpt2curr(light)
+                brg  = self.bearing_wpt2curr(light)
+                #Find closest light, in front of us, that is either red or yellow
+                if dist < closestlen and brg > 0.0 and (light.state == 0 or light.state == 1):
+                    self.light_ahead     = light
+                    self.light_ahead_idx = idx
+                    closestlen = dist
+            self.dist2light_m    = closestlen
+            
+            if False and self.light_ahead != None:
+                print("WAYPOINT UPDATER :: Nearest Traffic Light Dist    ", self.dist2light_m)
+                #print("WAYPOINT UPDATER :: Nearest Traffic Light State   ", self.light_ahead.state)
+                #print("WAYPOINT UPDATER :: Nearest Traffic Light Position", self.light_ahead.pose.pose.position.x,self.light_ahead.pose.pose.position.y)
+        
+        #Find nearest waypoint to closest light
+        if self.waypoints != None and self.light_ahead != None:
+            closestlen = 9999999
+            for idx,wpt in enumerate(self.waypoints):
+                dist = self.distance_2wpts(self.light_ahead,wpt)
+                #Find waypoint that is closest to the nearest red light we just found
+                if dist < closestlen:
+                    self.wpt_light_ahead     = wpt
+                    self.wpt_light_ahead_idx = idx
+                    closestlen = dist
+        
+            if False:
+                print("WAYPOINT UPDATER :: Nearest WPT to Light IDX     ", self.wpt_light_ahead_idx)
+                print("WAYPOINT UPDATER :: Nearest WPT to Light Position", self.wpt_light_ahead.pose.pose.position.x,self.wpt_light_ahead.pose.pose.position.y)
         pass
 
     def get_waypoint_velocity(self, waypoint):
@@ -131,9 +177,14 @@ class WaypointUpdater(object):
         self.waypoints = msg.waypoints 
         pass    
     
-    # Find the distance from a waypoint to current position
+    # Find the distance from a waypoint to the car's current position
     def distance_wpt2curr(self, wpt):
         dist = math.sqrt((self.pos_x-wpt.pose.pose.position.x)**2 + (self.pos_y-wpt.pose.pose.position.y)**2  + (self.pos_z-wpt.pose.pose.position.z)**2)
+        return dist
+        
+    # Find the distance between 2 specific waypoints   
+    def distance_2wpts(self, wpt1, wpt2):
+        dist = math.sqrt((wpt2.pose.pose.position.x-wpt1.pose.pose.position.x)**2 + (wpt2.pose.pose.position.y-wpt1.pose.pose.position.y)**2  + (wpt2.pose.pose.position.z-wpt1.pose.pose.position.z)**2)
         return dist
     
     # Find the bearing from current position to waypoint, need to rotate to car body frame
@@ -142,21 +193,18 @@ class WaypointUpdater(object):
         global_car_y = self.pos_y
         
         roll,pitch,yaw = tf.transformations.euler_from_quaternion([self.current_orient.x,self.current_orient.y,self.current_orient.z,self.current_orient.w])
-        yaw = -1.*yaw # TODO: Need to invert the sign of yaw for things to work, not clear why
-        # www.chrobotics.com/library/understanding-quaternions shows Y as pointing to the right in Quaternions
+        yaw = -1.*yaw 
 
         self.shiftx = wpt.pose.pose.position.x - global_car_x
         self.shifty = wpt.pose.pose.position.y - global_car_y
 
-        # updated equations (specifically + and -) to fix atan2 function
         self.del_x =  (self.shiftx)*math.cos(yaw) - (self.shifty)*math.sin(yaw)
         self.del_y =  (self.shiftx)*math.sin(yaw) + (self.shifty)*math.cos(yaw)  
-
-        # bearing = math.atan2(self.del_x,self.del_y)    
-        bearing = math.atan2(self.del_x,self.del_y) # x and y swapped per Notes.pptx
+  
+        bearing = math.atan2(self.del_x,self.del_y)
         return bearing
         
-    # Find the distance between 2 waypoints    
+    # Find the distance between 2 waypoints in a series of waypoints   
     def distance(self, waypoints, wp1, wp2):
         dist = 0
         dl = lambda a, b: math.sqrt((a.x-b.x)**2 + (a.y-b.y)**2  + (a.z-b.z)**2)

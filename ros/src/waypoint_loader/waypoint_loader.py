@@ -3,17 +3,14 @@
 import os
 import csv
 import math
-
-from geometry_msgs.msg import Quaternion
-
-from styx_msgs.msg import Lane, Waypoint
-
 import tf
 import rospy
 
+from geometry_msgs.msg import Quaternion
+from styx_msgs.msg import Lane, Waypoint
+
 CSV_HEADER = ['x', 'y', 'z', 'yaw']
 MAX_DECEL = 1.0
-
 
 class WaypointLoader(object):
 
@@ -22,8 +19,10 @@ class WaypointLoader(object):
 
         self.pub = rospy.Publisher('/base_waypoints', Lane, queue_size=1)
 
-        self.velocity = rospy.get_param('~velocity')
+        self.velocity   = rospy.get_param('~velocity')
+        self.yaw_in_deg = rospy.get_param('~yaw_in_deg')
         self.new_waypoint_loader(rospy.get_param('~path'))
+        
         rospy.spin()
 
     def new_waypoint_loader(self, path):
@@ -49,7 +48,10 @@ class WaypointLoader(object):
                 p.pose.pose.position.x = float(wp['x'])
                 p.pose.pose.position.y = float(wp['y'])
                 p.pose.pose.position.z = float(wp['z'])
-                q = self.quaternion_from_yaw(float(wp['yaw']))
+                yaw = float(wp['yaw'])
+                if self.yaw_in_deg == 1:
+                    yaw = math.pi/180*yaw # degrees to radians
+                q = self.quaternion_from_yaw(yaw)
                 p.pose.pose.orientation = Quaternion(*q)
                 p.twist.twist.linear.x = float(self.velocity*0.27778)
 
