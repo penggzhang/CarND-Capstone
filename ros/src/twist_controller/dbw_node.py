@@ -36,12 +36,12 @@ class DBWNode(object):
     def __init__(self):
         rospy.init_node('dbw_node')
 
-        vehicle_mass    = rospy.get_param('~vehicle_mass', 1736.35) # KG
+        self.vehicle_mass    = rospy.get_param('~vehicle_mass', 1736.35) # KG
         fuel_capacity   = rospy.get_param('~fuel_capacity', 13.5)   # GALS(?)
         brake_deadband  = rospy.get_param('~brake_deadband', .1)    #
         decel_limit     = rospy.get_param('~decel_limit', -5)       # M/S/S
         accel_limit     = rospy.get_param('~accel_limit', 1.)       # M/S/S
-        wheel_radius    = rospy.get_param('~wheel_radius', 0.2413)  # M
+        self.wheel_radius    = rospy.get_param('~wheel_radius', 0.2413)  # M
         wheel_base      = rospy.get_param('~wheel_base', 2.8498)    # M
         steer_ratio     = rospy.get_param('~steer_ratio', 14.8)     # Unitless
         max_lat_accel   = rospy.get_param('~max_lat_accel', 3.)     # M/S/S
@@ -72,9 +72,13 @@ class DBWNode(object):
         self.heading_err      = 0.0  # heading error, in radians
         
         # store previous pass of throttle, steering and brake to reduce latency
-        self.throttle_prev    = 0.0
-        self.steer_prev       = 0.0
-        self.brake_prev       = 0.0
+        self.throttle_prev          = 0.0
+        self.steer_prev             = 0.0
+        self.brake_prev             = 0.0
+        self.brake_new              = 0.0 # used for storing info between loops
+        self.current_velocity_prev  = 0.0
+        self.current_velocity_new   = 0.0 # used for storing info between loops
+        self.prevtime               = rospy.get_time()
 
         self.loop()
 
@@ -100,9 +104,33 @@ class DBWNode(object):
                                                                     self.CTE,
                                                                     proposed_angular_velocity,
                                                                     dbw_status)
+
+                # update info for estimating decel
+                self.brake_prev = self.brake_new
+                self.brake_new = brake
+
+                self.current_velocity_prev = self.current_velocity_new
+                self.current_velocity_new = current_linear_velocity
+
+                time = rospy.get_time()
+                dt = time - self.prevtime
+                self.prevtime = time
+
+                if dt < 1e-3:
+                    dt = 0.1
+
+                # calculate decel measured and estimated using physical equations
+                accel_meas = (self.current_velocity_new - self.current_velocity_prev) / dt
+                decel_calc = - self.brake_prev / (self.wheel_radius * self.vehicle_mass) # a = F/m = T/(r*m)
                                                                     
                 if dbw_status:
                     self.publish(throttle, brake, steering)
+
+                    # print the predicted decel versus measured, if decelerating
+                    if False: # self.brake_prev > 0.0:
+                        if self.current_velocity_prev > MPH2MPS:
+                            print('DBW NODE :: Decel calc ',decel_calc,' m/s^2')
+                            print('DBW NODE :: Decel meas ',accel_meas,' m/s^2')
             rate.sleep()
 
     def publish(self, throttle, brake, steer):
