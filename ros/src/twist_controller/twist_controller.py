@@ -20,7 +20,8 @@ class Controller(object):
         self.PIDCont_Thr = pid.PID(kp=1.0,ki=0.04,kd=0.1,mn= 0.0,mx=1.0)
         self.PIDCont_Brk = pid.PID(kp=200.0,ki=0.00,kd=0.0,mn= 0.0,mx=10000.0)
         #self.PIDCont_Str = pid.PID(kp=0.7,ki=0.001,kd=0.4,mn=-8.0,mx=8.0) #starting point for tuning
-        self.PIDCont_Str = pid.PID(kp=0.14,ki=0.01,kd=0.2,mn=-8.0,mx=8.0)
+        #self.PIDCont_Str = pid.PID(kp=0.14,ki=0.01,kd=0.2,mn=-8.0,mx=8.0) #starting point for tuning (2)
+        self.PIDCont_Str = pid.PID(kp=0.14,ki=0.0,kd=2.0,mn=-8.0,mx=8.0)
         self.YawCont_Str = yc.YawController(wheel_base=2.8498, steer_ratio=14.8, min_speed=10.0, max_lat_accel=3.0, max_steer_angle=8.0)
         # Initialize Low Pass Filters
         self.LPFilt_Thr  = lowpass.LowPassFilter(tau=0.0,ts=self.dt)
@@ -47,33 +48,32 @@ class Controller(object):
             if vel_err <= 0.:
                 brake = self.PIDCont_Brk.step(-1.*vel_err,self.dt)
                 #brake = self.LPFilt_Brk.filt(brake)
+                # don't control throttle if braking
+                self.PIDCont_Thr.reset()
                 if False:
                     print('Brake',brake)
             else:
                 throttle = self.PIDCont_Thr.step(vel_err,self.dt)
                 #throttle = self.LPFilt_Thr.filt(throttle)
+                # don't control brake if throttling
+                self.PIDCont_Brk.reset()
                 if False:
                     print('Throttle',throttle)
 
             # With yaw controller, this probably needs smaller gains, possibly mostly integral action
             cte_steer = self.PIDCont_Str.step(cross_track_error,self.dt)
 
-            # Debug
-            if False:
-                # overwrite these for debugging heading error integration
-                proposed_linear_velocity  = current_linear_velocity*math.cos(heading_error)
-                proposed_angular_velocity = current_linear_velocity*math.sin(heading_error)
-            
+           
             pred_steer = self.YawCont_Str.get_steering(proposed_linear_velocity, proposed_angular_velocity, current_linear_velocity)
 
-            #print('    PID steer command :',cte_steer)
-            #print('Raw Yaw steer command :',pred_steer)
+            print('    PID steer command :',cte_steer)
+            print('Raw Yaw steer command :',pred_steer)
             
             pred_steer = self.LPFilt_Str.filt(pred_steer) # filter the "feedforward term"
-            steer = cte_steer + pred_steer
+            steer = pred_steer + cte_steer
             
-            #print('Flt Yaw steer command :',pred_steer)
-            #print('  Total steer command :',steer)
+            print('Flt Yaw steer command :',pred_steer)
+            print('  Total steer command :',steer)
         else:
             #DBW is not enabled so manual steering, reset integrators and low pass filters
             self.ResetLPFs()

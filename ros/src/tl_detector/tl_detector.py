@@ -12,6 +12,7 @@ import cv2
 import yaml
 import sys
 import math
+import numpy as np
 
 STATE_COUNT_THRESHOLD = 3
 
@@ -205,11 +206,16 @@ class TLDetector(object):
 
         fx = self.config['camera_info']['focal_length_x']
         fy = self.config['camera_info']['focal_length_y']
+        #Current focal lengths are probably wrong, which leads incorrect pixel transformation.
+        #https://discussions.udacity.com/t/focal-length-wrong/358568
+
         image_width = self.config['camera_info']['image_width']
         image_height = self.config['camera_info']['image_height']
 
+        x, y = None, None
+
         # get transform between pose of camera and world frame
-        trans = None
+        trans, rot = None, None
         try:
             now = rospy.Time.now()
             self.listener.waitForTransform("/base_link", "/world", now, rospy.Duration(1.0))
@@ -233,14 +239,23 @@ class TLDetector(object):
         #               [  0.00000000e+00   0.00000000e+00   0.00000000e+00   1.00000000e+00]]
         
         #### Forward Projection
+        #TODO: Debug rot referenced before assignment
         # World to Camera Transformation (Rigid transformation = rotation + translation)
-        transformation_matrix = self.listener.fromTranslationRotation(trans, rot)
-        point_in_world_vector = np.array([[point_in_world.x], [point_in_world.y], [point_in_world.z], [1.0]], dtype=float)
-        camera_point = np.dot(transformation_matrix, point_in_world_vector)
+        if trans != None and rot != None:
+            transformation_matrix = self.listener.fromTranslationRotation(trans, rot)
+            point_in_world_vector = np.array([[point_in_world.x], [point_in_world.y], [point_in_world.z], [1.0]], dtype=float)
+            camera_point = np.dot(transformation_matrix, point_in_world_vector)
 
-        # Perspective Correction
-        x = fx * camera_point.x / camera_point.z
-        y = fy * camera_point.y / camera_point.z
+            #rospy.loginfo("Point in camera coords: %s", camera_point)
+
+            # Perspective Correction
+            #Instead of using the focal lengths in 'sim_traffic_light_config.yaml',
+            #experiment by hard coding with some trial values in correct magnitude.
+            #TODO: wait course teaching asisstant to classify on focal lengths
+            #and then locate the crop window.
+            fx, fy = 1200, 800
+            x = int(-fx * camera_point[1] / camera_point[0] + image_width  / 2)
+            y = int(-fy * camera_point[2] / camera_point[0] + image_height / 2)
 
         return (x, y)
 
@@ -261,11 +276,13 @@ class TLDetector(object):
         cv_image = self.bridge.imgmsg_to_cv2(self.camera_image, "bgr8")
 
         x, y = self.project_to_image_plane(light.pose.pose.position)
-
+        #rospy.loginfo("Projected point: (%s, %s)", x, y)
+        
         #TODO use light location to zoom in on traffic light in image
 
         #Get classification
-        return self.light_classifier.get_classification(cv_image)
+        #return self.light_classifier.get_classification(cv_image)
+        return TrafficLight.UNKNOWN
 
     def get_upcoming_light_wp(self, car_position, all_light_wps):
         """Find the waypoint of the upcoming light
@@ -330,16 +347,20 @@ class TLDetector(object):
                 light = self.lights[light_id]
                 distance_to_light = self.get_distance_btw_two_poses(self.pose.pose, light.pose.pose)
                 #rospy.loginfo("Distance to upcoming light: %s", distance_to_light)
-                
+
                 #If the car is farther than a pre-set visible distance,
                 #then return -1 for light waypoint and UNKNOWN for light state.
                 #Otherwise, proceed to recognize the light state.
                 if distance_to_light > VISIBLE_DISTANCE:
                     return -1, TrafficLight.UNKNOWN
                 else:
-                    #state = self.get_light_state(light)
-                    #return light_wp, state
-                    return -1, TrafficLight.UNKNOWN
+                    state = self.get_light_state(light)
+
+                    #Warn if predicted state conflicts with truth state
+                    #if state != light.state:
+                    #	rospy.logwarn("Predicted state: %s, Truth state: %s", state, light.state)
+
+                    return light_wp, state
             
         self.waypoints = None
         return -1, TrafficLight.UNKNOWN
