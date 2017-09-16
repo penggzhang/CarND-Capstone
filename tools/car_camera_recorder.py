@@ -13,11 +13,11 @@ out = cv2.VideoWriter('output.avi',fourcc, 20.0, (800,600))
 
 def image_callback(msg):
     print("Received an image!")
-    print(msg.encoding)
-    print(msg.height)
-    print(msg.width)
+#    print(msg.encoding)
+#    print(msg.height)
+#    print(msg.width)
     try:
-        img = bridge.imgmsg_to_cv2(msg, "8UC3")
+        img = bridge.imgmsg_to_cv2(msg, "bgr8")
 	img = cv2.cvtColor(img,cv2.COLOR_BGR2RGB)
     except CvBridgeError, e:
         print(e)
