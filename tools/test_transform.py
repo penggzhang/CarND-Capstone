@@ -14,21 +14,21 @@ import yaml
 class TransformTest(object):
     def __init__(self):
         rospy.init_node('transform_tester')
+
         self.listener = tf.TransformListener()
 
-	now = rospy.Time(0)
-    
-    self.listener.waitForTransform("/base_link", "/world", now, rospy.Duration(1.0))
-    (trans, rot) = self.listener.lookupTransform("/base_link", "/world", now)
-    matrix = self.listener.fromTranslationRotation(trans, rot)
-	
-    print(trans)
-	print("---")
-	print(rot)
-	print("---")
-	print(matrix)
+        now = rospy.Time(0)
+        self.listener.waitForTransform("/base_link", "/world", now, rospy.Duration(1.0))
+        (trans, rot) = self.listener.lookupTransform("/base_link", "/world", now)
+        matrix = self.listener.fromTranslationRotation(trans, rot)
 
-    rospy.spin()
+        print(trans)
+        print("---")
+        print(rot)
+        print("---")
+        print(matrix)
+        
+        rospy.spin()
 
 if __name__ == '__main__':
     try:
