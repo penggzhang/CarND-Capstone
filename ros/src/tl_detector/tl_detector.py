@@ -15,9 +15,11 @@ import math
 import numpy as np
 from light_msgs.msg import UpcomingLight
 
+from tl_debug import TLDebug
+
 STATE_COUNT_THRESHOLD = 3
 
-VISIBLE_DISTANCE = 300
+VISIBLE_DISTANCE = 200
 
 class TLDetector(object):
     def __init__(self):
@@ -63,6 +65,9 @@ class TLDetector(object):
         #Publisher for UpcomingLight message
         self.upcoming_light_pub = rospy.Publisher('/upcoming_light', UpcomingLight, queue_size=1)
 
+        # Debug Publisher
+        self.debug = TLDebug()
+
         rospy.spin()
 
     def pose_cb(self, msg):
@@ -105,28 +110,26 @@ class TLDetector(object):
         self.state_count += 1
 
 
-    def get_distance_waypoint_to_pose(self, waypoint, pose):
-        """Calculate the distance between the waypoint and the pose
-
+    def get_unsqrt_distance_between_poses(self, pose_1, pose_2):
+        """Calculate the unsquared root distance between two poses in a fast way
+           To speed up calculations.
         Args:
-            waypoint (Pose): waypoint
-            pose     (Pose): position to match a waypoint to
+            pose_1 (Pose): first pose
+            pose_2 (Pose): second pose
 
         Returns:
-            float: distance between waypoint and pose
+            float: unsquared root distance between waypoint and pose
 
         """
 
         diff_x = waypoint.x - pose.x
         diff_y = waypoint.y - pose.y
-        diff_z = waypoint.z - pose.z
 
-        return math.sqrt(diff_x*diff_x + diff_y*diff_y + diff_z*diff_z)
+        return diff_x*diff_x + diff_y*diff_y
 
 
-    def get_distance_btw_two_poses(self, pose_1, pose_2):
+    def get_distance_between_poses(self, pose_1, pose_2):
         """Calculate the distance between two poses
-
         Args:
             pose_1 (Pose): pose of 1st point
             pose_2 (Pose): pose of 2nd point
@@ -146,11 +149,12 @@ class TLDetector(object):
     def get_closest_waypoint(self, pose):
         """Identifies the closest path waypoint to the given position
             https://en.wikipedia.org/wiki/Closest_pair_of_points_problem
+
         Args:
             pose (Pose): position to match a waypoint to
 
         Returns:
-            int: index of the closest waypoint in self.waypoints
+            int: index of the closest waypoint (in self.waypoints) to the pose
 
         """
 
@@ -164,7 +168,10 @@ class TLDetector(object):
             for i in range(0, len(self.waypoints.waypoints)):
                 waypoint  = self.waypoints.waypoints[i].pose.pose
                 posepoint = pose
-                distance = self.get_distance_btw_two_poses(waypoint, posepoint)
+                
+                # It is not needed to use the sqrt distance, since we need only which waypoint is the nearest.
+                # We can use no sqrt distance for fast calculation.
+                distance = self.get_unsqrt_distance_between_poses(waypoint, posepoint) 
                 if distance < min_distance:
                     min_distance = distance
                     nearest_waypoint_index = i
@@ -228,12 +235,14 @@ class TLDetector(object):
         except (tf.Exception, tf.LookupException, tf.ConnectivityException):
             rospy.logerr("Failed to find camera to map transform")
 
-        #### Use tranform and rotation to calculate 2D position of light in image
         # http://docs.ros.org/jade/api/tf/html/c++/classtf_1_1Transformer.html
         # https://w3.cs.jmu.edu/spragunr/CS354_S14/labs/tf_lab/html/tf.listener.TransformerROS-class.html
         # http://wiki.ros.org/tf/TfUsingPython
         # http://www.cse.psu.edu/~rtc12/CSE486/lecture12.pdf
         # http://www.cse.psu.edu/~rtc12/CSE486/lecture13.pdf
+        # http://slideplayer.com/slide/4547175/
+        # http://slideplayer.com/slide/4852283/
+        # http://www.ics.uci.edu/~majumder/VC/classes/cameracalib.pdf
         # https://stackoverflow.com/questions/5288536/how-to-change-3d-point-to-2d-pixel-location?rq=1
         # ex. trans = [-1230.0457257142773, -1080.1731777599543, -0.10696510000000001]
         # ex. rot   = [0.0, 0.0, -0.0436201197059201, 0.9990481896069084]
@@ -263,6 +272,7 @@ class TLDetector(object):
 
         return (x, y)
 
+
     def get_light_state(self, light):
         """Determines the current color of the traffic light
 
@@ -283,10 +293,22 @@ class TLDetector(object):
         #rospy.loginfo("Projected point: (%s, %s)", x, y)
         
         #TODO use light location to zoom in on traffic light in image
+        distance_car_tl = self.get_distance_between_poses(self.pose.pose, light.pose.pose) # Need the real distance
+
+        #TODO Define logic for Zoom based on distance... bigger distance to traffic light, smaller crop area
+
+        #TODO Prepare the image to be classified
+        #crop_image = cv_image[y-20:y+130, x-40:x+40]
+        #resized_image = cv2.resize(crop_img, (80, 150)) 
+
+        #Publishing Images and metadata for debug and dataset generator
+        self.debug.publish_debug_image(cv_image, distance_car_tl, x, y) # Publishing in /debug/image_tl Use 'rqt' to visualize the image
+        self.debug.publish_debug_image_metadata(cv_image, 0, y-20, x-40, y+130, x+40) # Publishing in /debug/image_tl_metadata
 
         #Get classification
         #return self.light_classifier.get_classification(cv_image)
         return TrafficLight.UNKNOWN
+
 
     def get_upcoming_light_wp(self, car_position, all_light_wps):
         """Find the waypoint of the upcoming light
@@ -319,6 +341,14 @@ class TLDetector(object):
         return light_wp, light_id
 
 
+    def generate_upcominglight_msg(self, waypoint, id, pose):
+        msg = UpcomingLight()
+        msg.waypoint = waypoint
+        msg.index = id
+        msg.pose = pose
+        return msg
+
+
     def process_traffic_lights(self):
         """Finds closest visible traffic light, if one exists, and determines its
             location and color
@@ -340,40 +370,30 @@ class TLDetector(object):
         #Find the closest waypoint for each traffic light
         if self.all_light_wps == None and self.waypoints != None:
             self.all_light_wps = self.get_all_light_wps(self.config['light_positions'])
-
-        #Find the waypoint and index of the upcoming light
+        
+        #####Find the waypoint and index of the upcoming light
+        # 1 - Check that we have traffic lights waypoints and car location
         if self.all_light_wps != None and self.car_position != None:
+            # Get the location and index of the upcoming nearest traffic light
             light_wp, light_id = self.get_upcoming_light_wp(self.car_position, self.all_light_wps)
             #rospy.loginfo("Upcoming light waypoint and index: %s, %s", light_wp, light_id)
 
-            #Find the distance from the car to the upcoming light
-            if self.lights != None and self.pose != None:
+            # Find the distance between the car and the upcoming light
+            distance_to_light = self.get_distance_between_poses(self.pose.pose, self.lights[light_id].pose.pose)
+
+            # Publish the message of UpcomingLight (To be discussed with Chen)
+            upcoming_msg = self.generate_upcominglight_msg(light_wp, light_id, self.lights[light_id].pose.pose)
+            self.upcoming_light_pub.publish(upcoming_msg)
+
+            # Check if the car is in the range of VISIBLE_DISTANCE in order to proceed with the classification
+            if distance_to_light < VISIBLE_DISTANCE:
                 light = self.lights[light_id]
 
-                #Publish the message of UpcomingLight
-                msg = UpcomingLight()
-                msg.waypoint = light_wp
-                msg.index = light_id
-                msg.pose = light.pose
-                self.upcoming_light_pub.publish(msg)
+        # 2 - Check if light is available, then try to identify the color
+        if light:
+            state = self.get_light_state(light)
+            return light_wp, state
 
-                distance_to_light = self.get_distance_btw_two_poses(self.pose.pose, light.pose.pose)
-                #rospy.loginfo("Distance to upcoming light: %s", distance_to_light)
-
-                #If the car is farther than a pre-set visible distance,
-                #then return -1 for light waypoint and UNKNOWN for light state.
-                #Otherwise, proceed to recognize the light state.
-                if distance_to_light > VISIBLE_DISTANCE:
-                    return -1, TrafficLight.UNKNOWN
-                else:
-                    state = self.get_light_state(light)
-
-                    #Warn if predicted state conflicts with truth state
-                    #if state != light.state:
-                    #	rospy.logwarn("Predicted state: %s, Truth state: %s", state, light.state)
-
-                    return light_wp, state
-            
         self.waypoints = None
         return -1, TrafficLight.UNKNOWN
 
