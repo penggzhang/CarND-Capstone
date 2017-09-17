@@ -5,6 +5,8 @@ from geometry_msgs.msg import PoseStamped
 from styx_msgs.msg import Lane, Waypoint, TrafficLightArray
 import tf
 import math
+from light_msgs.msg import UpcomingLight
+from std_msgs.msg import Int32
 
 '''
 This node will publish waypoints from the car's current position to some `x` distance ahead.
@@ -21,28 +23,46 @@ as well as to verify your TL classifier.
 TODO (for Yousuf and Aaron): Stopline location for each traffic light.
 '''
 
+# TUNABLE PARAMETERS
 LOOKAHEAD_WPS = 30       # Number of waypoints published
 SPEED_MPH     = 20.      # Forward speed in miles per hour
+STOP_DIST     = 29.      # Distance in meters to stop in front of stoplight, corresponds to white stop line
+STOP_DIST_ERR = 20       # Distance to start applying brakes from STOP_DIST
+
+# CONSTANTS
 MPH2MPS       = 0.44704  # Conversion miles per hour to meters per second
+
+# DEBUG FLAGS
 DEBUG         = False    # True = Print Statements appear in Terminal with Debug info
 DEBUG_TOPICS  = False    # Enable debug output topics
-SIMULATE_TL   = True     # True = Simulate traffic light positions with /vehicle/traffic_lights
+SIMULATE_TL   = True     # True = Simulate traffic light positions with /vehicle/traffic_lights, False = use tl_detector /upcoming_light topic
+DEBUG_TLDET   = False    # True = Print TL_DETECTOR topic debug information
+DEBUG_TLSIM   = True     # True = Print traffic light information from simulator data debug information
+
 class WaypointUpdater(object):
     def __init__(self):
+    
+        #Initialize node
         rospy.init_node('waypoint_updater')
 
-        # Subscribers
+        # Setup Subscribers
         rospy.Subscriber('/current_pose', PoseStamped, self.pose_cb, queue_size=1)
-        rospy.Subscriber('/base_waypoints', Lane, self.waypoints_cb, queue_size=1)
-        if SIMULATE_TL:
-            rospy.Subscriber('/vehicle/traffic_lights', TrafficLightArray, self.sim_traffic_cb, queue_size=1)
+        self.base_waypoints_sub = rospy.Subscriber('/base_waypoints', Lane, self.waypoints_cb, queue_size=1)
         
-        # Publishers
+        # If tl_detector node is active get traffic light data from /upcoming_light topic, otherwise use the topic from the sim /vehicle/traffic_lights
+        if SIMULATE_TL:
+            rospy.Subscriber('/vehicle/traffic_lights', TrafficLightArray, self.sim_traffic_cb, queue_size=1) 
+        else:
+            rospy.Subscriber('/upcoming_light',UpcomingLight,self.upcoming_lt_cb,queue_size=1)
+            #rospy.Subscriber('/traffic_waypoint',Int32,self.traffic_cb,queue_size=1)
+        
+        # Setup Publishers
         self.final_waypoints_pub = rospy.Publisher('final_waypoints', Lane, queue_size=1)
+        # Topics to publish only if debugging
         if DEBUG_TOPICS:
             self.debug_currentpos_pub= rospy.Publisher('debug_current_pose', PoseStamped, queue_size=1)
 
-        # Member Variables
+        # Initialize Member Variables
         self.pos_x            = 0.
         self.pos_y            = 0.
         self.pos_z            = 0.
@@ -59,29 +79,37 @@ class WaypointUpdater(object):
         
     def loop(self): 
         if self.waypoints != None:
+            
+            # Find waypoint directly ahead of us and assign it to self.wpt_ahead
             self.find_next_waypoint()
+            
+            # Initialize the final waypoints ahead of us
             self.final_wpts = Lane()
+            
             if False:
                 print('WPT Ahead        ',"x: ",self.wpt_ahead.pose.pose.position.x,"y: ",self.wpt_ahead.pose.pose.position.y,"idx: ",self.wpt_ahead_idx)
                 print('WPT List Length: ', len(self.waypoints)) 
             
-            #Form final waypoint list from starting waypoint to waypoints ahead
+            # Form final waypoint list starting from the waypoint directly ahead
             final_wpt_idx = self.wpt_ahead_idx+LOOKAHEAD_WPS
-            if final_wpt_idx < len(self.waypoints):
+            if final_wpt_idx < len(self.waypoints): # protect against wrapping around the waypoints array
                 self.final_wpts.waypoints = self.waypoints[self.wpt_ahead_idx:final_wpt_idx]
             else:
                 self.final_wpts.waypoints = self.waypoints[self.wpt_ahead_idx:len(self.waypoints)]
 
-            #Fill target speeds
+            # Fill target speeds
             for wpt in self.final_wpts.waypoints:
-                # If traffic light is ahead and we are not already in the middle of the lane
-                # Set target speed
-                if self.dist2light_m > 30 and self.dist2light_m < 50:
+                # If traffic light is ahead and we are not already in the middle of the lane then set target speed
+                if math.fabs(self.dist2light_m - STOP_DIST) < STOP_DIST_ERR:
+                    # Slow the car down to a stop
                     self.target_speed_mps = 0.0
                 else:
+                    # Car goes at normal speed
                     self.target_speed_mps = SPEED_MPH*MPH2MPS
-                    
+                
+                # Set speeds in waypoint list
                 wpt.twist.twist.linear.x = self.target_speed_mps
+                
                 if False:
                     print('WAYPOINT UPDATER :: wpt_ahead_idx:       ', self.wpt_ahead_idx) 
                     print('WAYPOINT UPDATER :: wpt_light_ahead_idx: ', self.wpt_light_ahead_idx) 
@@ -94,7 +122,7 @@ class WaypointUpdater(object):
             
             #Topics to publish for debugging
             if DEBUG_TOPICS:
-                self.debug_currpos = PoseStamped()
+                self.debug_currpos                  = PoseStamped()
                 self.debug_currpos.header.stamp     = rospy.Time.now()
                 self.debug_currpos.pose.position.x  = self.pos_x
                 self.debug_currpos.pose.position.y  = self.pos_y
@@ -114,9 +142,22 @@ class WaypointUpdater(object):
             print("WAYPOINT UPDATER :: Curr Pos  ","x: ",self.pos_x, "y: ", self.pos_y)
         
         pass
+        
+    def upcoming_lt_cb(self,msg):
+        self.light_ahead     = msg.pose
+        self.light_ahead_idx = msg.waypoint
+        self.dist2light_m    = math.sqrt((self.pos_x - self.light_ahead.pose.position.x)**2 + (self.pos_y-self.light_ahead.pose.position.y)**2)
+        if DEBUG_TLDET:
+            print("From TL_DETECTOR :: Light Ahead IDX  ",self.light_ahead_idx)
+            print("From TL_DETECTOR :: Light Ahead DIST ",self.dist2light_m)
+        pass
+    
+    def traffic_cb(self,msg):
+        # We are already getting this from the /upcoming_light topic
+        # self.light_ahead_idx = msg.data
+        pass
 
     def sim_traffic_cb(self, msg):
-    
         #Find closest light ahead of us
         closestlen = 9999999
         if self.current_orient != None:
@@ -130,11 +171,10 @@ class WaypointUpdater(object):
                     closestlen = dist
             self.dist2light_m    = closestlen
             
-            if False and self.light_ahead != None:
-                print("WAYPOINT UPDATER :: Nearest Traffic Light Dist    ", self.dist2light_m)
-                #print("WAYPOINT UPDATER :: Nearest Traffic Light State   ", self.light_ahead.state)
-                #print("WAYPOINT UPDATER :: Nearest Traffic Light Position", self.light_ahead.pose.pose.position.x,self.light_ahead.pose.pose.position.y)
-        
+            if DEBUG_TLSIM and self.light_ahead != None:
+                print("SIM TL :: Light Ahead IDX          ", self.light_ahead_idx)
+                print("SIM TL :: Light Ahead DIST         ", self.dist2light_m)
+                
         #Find nearest waypoint to closest light
         if self.waypoints != None and self.light_ahead != None:
             closestlen = 9999999
@@ -146,9 +186,8 @@ class WaypointUpdater(object):
                     self.wpt_light_ahead_idx = idx
                     closestlen = dist
         
-            if False:
-                print("WAYPOINT UPDATER :: Nearest WPT to Light IDX     ", self.wpt_light_ahead_idx)
-                print("WAYPOINT UPDATER :: Nearest WPT to Light Position", self.wpt_light_ahead.pose.pose.position.x,self.wpt_light_ahead.pose.pose.position.y)
+            if DEBUG_TLSIM:
+                print("SIM TL :: Nearest WPT to Light IDX ", self.wpt_light_ahead_idx)
         pass
 
     def get_waypoint_velocity(self, waypoint):
@@ -174,7 +213,9 @@ class WaypointUpdater(object):
     
     # When a message is recieved from /base_waypoints topic store it
     def waypoints_cb(self, msg):
-        self.waypoints = msg.waypoints 
+        self.waypoints = msg.waypoints
+        #only need to set /base_waypoints once, unsubscribe to improve performance 
+        self.base_waypoints_sub.unregister()
         pass    
     
     # Find the distance from a waypoint to the car's current position
