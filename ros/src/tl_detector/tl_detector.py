@@ -13,6 +13,7 @@ import yaml
 import sys
 import math
 import numpy as np
+from light_msgs.msg import UpcomingLight
 
 STATE_COUNT_THRESHOLD = 3
 
@@ -58,6 +59,9 @@ class TLDetector(object):
 
         #The closest waypoint to car
         self.car_position = None
+
+        #Publisher for UpcomingLight message
+        self.upcoming_light_pub = rospy.Publisher('/upcoming_light', UpcomingLight, queue_size=1)
 
         rospy.spin()
 
@@ -188,7 +192,7 @@ class TLDetector(object):
             wp = self.get_closest_waypoint(pose)
             all_light_wps.append(wp)
 
-        rospy.loginfo("Waypoint indices of all lights: %s", all_light_wps)
+        #rospy.loginfo("Waypoint indices of all lights: %s", all_light_wps)
         return all_light_wps
 
 
@@ -345,6 +349,14 @@ class TLDetector(object):
             #Find the distance from the car to the upcoming light
             if self.lights != None and self.pose != None:
                 light = self.lights[light_id]
+
+                #Publish the message of UpcomingLight
+                msg = UpcomingLight()
+                msg.waypoint = light_wp
+                msg.index = light_id
+                msg.pose = light.pose
+                self.upcoming_light_pub.publish(msg)
+
                 distance_to_light = self.get_distance_btw_two_poses(self.pose.pose, light.pose.pose)
                 #rospy.loginfo("Distance to upcoming light: %s", distance_to_light)
 
