@@ -58,10 +58,10 @@ class TLDebug(object):
         font = cv2.FONT_HERSHEY_TRIPLEX
         cv2.putText(image, 'Distance Next TL => {}'.format(distance), (10, 30), font, 1, (0, 255, 0))
         cv2.putText(image, '(X, Y) => {} {}'.format(x, y), (10, 60), font, 1, (0, 255, 0))
-        if 0 <= x <= 800 and 0 <= y <= 600 and distance < 200.0:
-            cv2.putText(image, 'Traffic Light in Image', (10, 90), font, 1, (0, 255, 0))
-        else:
-            cv2.putText(image, 'No Traffic Light in Image', (10, 90), font, 1, (0, 0, 255))
+        # if 0 <= x <= 800 and 0 <= y <= 600 and distance < 200.0:
+        #     cv2.putText(image, 'Traffic Light in Range', (10, 90), font, 1, (0, 255, 0))
+        # else:
+        #     cv2.putText(image, 'No Traffic Light in Image', (10, 90), font, 1, (0, 0, 255))
 
 
     def publish_debug_image(self, image, distance, x, y):
