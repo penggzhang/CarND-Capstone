@@ -97,11 +97,20 @@ class WaypointUpdater(object):
             if final_wpt_idx < len(self.waypoints): # protect against wrapping around the waypoints array
                 self.final_wpts.waypoints = self.waypoints[self.wpt_ahead_idx:final_wpt_idx]
             else:
+                # Handle the case when the base waypoint indicies wrap back to zero
                 self.final_wpts.waypoints = self.waypoints[self.wpt_ahead_idx:len(self.waypoints)]
+                idx_prev_0 = len(self.waypoints) - self.wpt_ahead_idx
+                idx_past_0 = LOOKAHEAD_WPS - idx_prev_0
+                for idx in range(idx_past_0):
+                    self.final_wpts.waypoints.append(self.waypoints[idx])
             
             idx = 0
+            fwpt_idx = 0
             # Fill target speeds
             for wpt in self.final_wpts.waypoints:
+                if False:
+                    print('Final WPT IDX,X,Y',fwpt_idx,wpt.pose.pose.position.x,wpt.pose.pose.position.y)
+                    fwpt_idx = fwpt_idx + 1
             
                 # Two Checks before we set deceleration profile:
                 # 1) Check if we are NOT past the white stop line in the middle of the intersection => dont stop in middle
