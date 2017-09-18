@@ -122,8 +122,8 @@ class TLDetector(object):
 
         """
 
-        diff_x = waypoint.x - pose.x
-        diff_y = waypoint.y - pose.y
+        diff_x = pose_1.position.x - pose_2.position.x
+        diff_y = pose_1.position.y - pose_2.position.y
 
         return diff_x*diff_x + diff_y*diff_y
 

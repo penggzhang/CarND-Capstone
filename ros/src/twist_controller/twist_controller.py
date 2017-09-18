@@ -66,14 +66,14 @@ class Controller(object):
            
             pred_steer = self.YawCont_Str.get_steering(proposed_linear_velocity, proposed_angular_velocity, current_linear_velocity)
 
-            print('    PID steer command :',cte_steer)
-            print('Raw Yaw steer command :',pred_steer)
+            #print('    PID steer command :',cte_steer)
+            #print('Raw Yaw steer command :',pred_steer)
             
             pred_steer = self.LPFilt_Str.filt(pred_steer) # filter the "feedforward term"
             steer = pred_steer + cte_steer
             
-            print('Flt Yaw steer command :',pred_steer)
-            print('  Total steer command :',steer)
+            #print('Flt Yaw steer command :',pred_steer)
+            #print('  Total steer command :',steer)
         else:
             #DBW is not enabled so manual steering, reset integrators and low pass filters
             self.ResetLPFs()
