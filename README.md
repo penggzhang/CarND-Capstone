@@ -1,6 +1,6 @@
 # TEAM AURORA: SDCND CAPSTONE PROJECT
 
-### Team Leader: Siva Kondubhatla (sivakrank@gmail.com)
+### Team Leader: Siva Kondubhatla (sivakirank@gmail.com)
 
 ### Team Members: 
 * Andrew Stewart (andrew.stewart2@honeywell.com) 
