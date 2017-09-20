@@ -22,12 +22,13 @@ class Controller(object):
         self.PIDCont_Brk = pid.PID(kp=200.0,ki=0.00,kd=0.0,mn= 0.0,mx=10000.0)
         #self.PIDCont_Str = pid.PID(kp=0.7,ki=0.001,kd=0.4,mn=-8.0,mx=8.0) #starting point for tuning
         #self.PIDCont_Str = pid.PID(kp=0.14,ki=0.01,kd=0.2,mn=-8.0,mx=8.0) #starting point for tuning (2)
-        self.PIDCont_Str = pid.PID(kp=0.14,ki=0.0,kd=2.0,mn=-8.0,mx=8.0)
+        self.PIDCont_Str = pid.PID(kp=0.14,ki=0.0,kd=2.0,mn=-1.5,mx=1.5) #limit to +/-1.5rad authority for 99.5% of data
         self.YawCont_Str = yc.YawController(wheel_base=2.8498, steer_ratio=14.8, min_speed=10.0, max_lat_accel=3.0, max_steer_angle=8.0)
         # Initialize Low Pass Filters
         self.LPFilt_Thr  = lowpass.LowPassFilter(tau=0.0,ts=self.dt)
         self.LPFilt_Brk  = lowpass.LowPassFilter(tau=0.0,ts=self.dt)
         self.LPFilt_Str  = lowpass.LowPassFilter(tau=0.5,ts=self.dt)
+        self.LPFilt_CTE  = lowpass.LowPassFilter(tau=0.2122,ts=self.dt) # cutoff frequency of 4.71 rad/sec (0.75Hz)
         self.first = True # first pass flag
         pass
 
@@ -54,6 +55,9 @@ class Controller(object):
             proposed_linear_velocity_clip = proposed_linear_velocity
             if proposed_linear_velocity_clip < 0.0:
                 proposed_linear_velocity_clip = -proposed_linear_velocity
+                
+            # Filter the cross track error to remove signal noise above 0.75Hz
+            cross_track_error_flt =  = self.LPFilt_CTE.filt(cross_track_error)
            
             # Compute velocity error
             vel_err  = proposed_linear_velocity_clip-current_linear_velocity
@@ -75,7 +79,7 @@ class Controller(object):
                     print('Throttle',throttle)
 
             # With yaw controller, this probably needs smaller gains, possibly mostly integral action
-            cte_steer = self.PIDCont_Str.step(cross_track_error,self.dt)
+            cte_steer = self.PIDCont_Str.step(cross_track_error_flt,self.dt)
 
             pred_steer = self.YawCont_Str.get_steering(proposed_linear_velocity_clip, proposed_angular_velocity_clip, current_linear_velocity)
             
@@ -125,6 +129,8 @@ class Controller(object):
                 f.write(str(pred_steer_flt))                    # Matlab index 11
                 f.write(', ')
                 f.write(str(steer))                             # Matlab index 12
+                f.write(', ')
+                f.write(str(cross_track_error_flt))             # Matlab index 13
                 f.write(';...\n')
                 f.close()
             # end if DEBUG_STEER:
