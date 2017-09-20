@@ -118,12 +118,12 @@ class TLDetector(object):
             pose_2 (Pose): second pose
 
         Returns:
-            float: unsquared root distance between waypoint and pose
+            float: unsquared root distance between two poses
 
         """
 
-        diff_x = waypoint.x - pose.x
-        diff_y = waypoint.y - pose.y
+        diff_x = pose_1.position.x - pose_2.position.x
+        diff_y = pose_1.position.y - pose_2.position.y
 
         return diff_x*diff_x + diff_y*diff_y
 
@@ -379,15 +379,16 @@ class TLDetector(object):
             #rospy.loginfo("Upcoming light waypoint and index: %s, %s", light_wp, light_id)
 
             # Find the distance between the car and the upcoming light
-            distance_to_light = self.get_distance_between_poses(self.pose.pose, self.lights[light_id].pose.pose)
+            if self.pose != None and self.lights != None:
+                distance_to_light = self.get_distance_between_poses(self.pose.pose, self.lights[light_id].pose.pose)
 
-            # Publish the message of UpcomingLight (To be discussed with Chen)
-            upcoming_msg = self.generate_upcominglight_msg(light_wp, light_id, self.lights[light_id].pose.pose)
-            self.upcoming_light_pub.publish(upcoming_msg)
+                # Publish the message of UpcomingLight (To be discussed with Chen)
+                upcoming_msg = self.generate_upcominglight_msg(light_wp, light_id, self.lights[light_id].pose.pose)
+                self.upcoming_light_pub.publish(upcoming_msg)
 
-            # Check if the car is in the range of VISIBLE_DISTANCE in order to proceed with the classification
-            if distance_to_light < VISIBLE_DISTANCE:
-                light = self.lights[light_id]
+                # Check if the car is in the range of VISIBLE_DISTANCE in order to proceed with the classification
+                if distance_to_light < VISIBLE_DISTANCE:
+                    light = self.lights[light_id]
 
         # 2 - Check if light is available, then try to identify the color
         if light:
