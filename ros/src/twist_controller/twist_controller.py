@@ -6,7 +6,7 @@ import rospy
 
 #GAS_DENSITY = 2.858   # TODO: Figure out why we need this - fuel in tank sloshing?
 #ONE_MPH     = 0.44704 # MPH to M/S conversion
-DEBUG_STEER = False
+DEBUG_STEER = True
 
 class Controller(object):
 
@@ -57,7 +57,7 @@ class Controller(object):
                 proposed_linear_velocity_clip = -proposed_linear_velocity
                 
             # Filter the cross track error to remove signal noise above 0.75Hz
-            cross_track_error_flt =  = self.LPFilt_CTE.filt(cross_track_error)
+            cross_track_error_flt = self.LPFilt_CTE.filt(cross_track_error)
            
             # Compute velocity error
             vel_err  = proposed_linear_velocity_clip-current_linear_velocity
@@ -158,4 +158,5 @@ class Controller(object):
         self.LPFilt_Thr  = lowpass.LowPassFilter(tau=0.0,ts=self.dt)
         self.LPFilt_Brk  = lowpass.LowPassFilter(tau=0.0,ts=self.dt)
         self.LPFilt_Str  = lowpass.LowPassFilter(tau=0.5,ts=self.dt)
+        self.LPFilt_CTE  = lowpass.LowPassFilter(tau=0.2,ts=self.dt)
         pass
