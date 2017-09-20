@@ -10,6 +10,9 @@ class PID(object):
         self.kd = kd
         self.min = mn
         self.max = mx
+        self.pterm = 0.0
+        self.iterm = 0.0
+        self.dterm = 0.0
 
         self.int_val = self.last_int_val = self.last_error = 0.
 
@@ -23,7 +26,12 @@ class PID(object):
         integral = self.int_val + error * sample_time;
         derivative = (error - self.last_error) / sample_time;
 
-        y = self.kp * error + self.ki * self.int_val + self.kd * derivative;
+        # make individual terms available for tuning
+        self.pterm = self.kp * error
+        self.iterm = self.ki * self.int_val
+        self.dterm = self.kd * derivative
+
+        y = self.pterm + self.iterm + self.dterm;
         val = max(self.min, min(y, self.max))
 
         if val > self.max:
