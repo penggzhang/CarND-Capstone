@@ -29,6 +29,8 @@ LOOKAHEAD_WPS = 30       # Number of waypoints published
 SPEED_MPH     = 20.      # Forward speed in miles per hour
 STOP_LINE     = 29.      # Distance in meters to stop in front of stoplight, corresponds to white stop line
 STOP_DIST_ERR = 15.      # Distance to start applying brakes ahead of STOP_LINE
+LL_WPT_SEARCH = 3        # Number of waypoints behind to search over to detect new waypoint ahead from previous nearest waypoint
+UL_WPT_SEARCH = 50       # Number of waypoints ahead to search over to detect new waypoint ahead from previous nearest waypoint
 
 # CONSTANTS
 MPH2MPS       = 0.44704  # Conversion miles per hour to meters per second
@@ -40,6 +42,7 @@ SIMULATE_TL   = True     # True = Simulate traffic light positions with /vehicle
 DEBUG_TLDET   = False    # True = Print TL_DETECTOR topic debug information
 DEBUG_TLSIM   = False    # True = Print traffic light information from simulator data debug information
 DEBUG_TGTSPD  = False    # True = Print debug information for target velocity calculations
+DEBUG_SEARCH  = False    # True = Pring debug information on searching the base_waypoints for our current position
 
 class WaypointUpdater(object):
     def __init__(self):
@@ -70,11 +73,12 @@ class WaypointUpdater(object):
         self.pos_y            = 0.
         self.pos_z            = 0.
         self.waypoints        = None
-        self.wpt_ahead_idx    = 0.       
+        self.wpt_ahead_idx    = None       
         self.wpt_ahead        = None
         self.final_wpts       = None
         self.current_orient   = None
         self.light_ahead      = None
+        self.search_range     = None
         self.target_speed_mps = SPEED_MPH*MPH2MPS
         self.dist2light_m     = 9999.
         rospy.spin()
@@ -227,7 +231,11 @@ class WaypointUpdater(object):
         #Find nearest waypoint to closest light
         if self.waypoints != None and self.light_ahead != None:
             closestlen = 9999999
-            for idx,wpt in enumerate(self.waypoints):
+            base_range = range(len(self.waypoints))
+            if self.search_range != None:
+                base_range = self.search_range 
+            for idx in base_range:
+                wpt  = self.waypoints[idx] 
                 dist = self.distance_2wpts(self.light_ahead,wpt)
                 #Find waypoint that is closest to the nearest red light we just found
                 if dist < closestlen:
@@ -249,7 +257,39 @@ class WaypointUpdater(object):
     # Find the nearest waypoint ahead based on current position and bearing to next wpt
     def find_next_waypoint(self):
         closestlen = 9999999
-        for idx,wpt in enumerate(self.waypoints):
+        # Define a range to search for our current position
+        self.search_range = range(len(self.waypoints))
+                
+        # Narrow the search range so we don't need to search the whole \base_waypoints set
+        if self.wpt_ahead_idx != None:
+            # Handle the case where we wrap around the 0 index of the waypoints
+            if self.wpt_ahead_idx+UL_WPT_SEARCH < len(self.waypoints):
+                        
+                lower_lim = self.wpt_ahead_idx
+                upper_lim = self.wpt_ahead_idx+UL_WPT_SEARCH
+                
+                if DEBUG_SEARCH:
+                        print("--------------------------------------")
+                        print("len(self.waypoints) ", len(self.waypoints))
+                        print("wpt_ahead_idx ", self.wpt_ahead_idx) 
+                        print("wpt_ahead_idx-LL_WPT_SEARCH ", lower_lim) 
+                        print("wpt_ahead_idx+UL_WPT_SEARCH ", upper_lim)
+                    
+                self.search_range = range(lower_lim,upper_lim)
+            else:
+                idx_prev_0        = len(self.waypoints) - self.wpt_ahead_idx
+                idx_past_0        = UL_WPT_SEARCH - idx_prev_0
+                range_behind0     = range(idx_prev_0,len(self.waypoints))
+                range_ahead0      = range(0,idx_past_0)
+                self.search_range = range_behind0+range_ahead0
+                if DEBUG_SEARCH:
+                    print("wpt_ahead_idx ", self.wpt_ahead_idx) 
+                    print("idx_prev_0 ", idx_prev_0) 
+                    print("idx_past_0 ", idx_past_0)
+                             
+        # Loop over \base_waypoints and find the nearest wpt in front of us   
+        for idx in self.search_range:
+            wpt  = self.waypoints[idx] 
             dist = self.distance_wpt2curr(wpt)
             brg= self.bearing_wpt2curr(wpt)
             #if dist < closestlen and (math.pi/2-brg) < math.pi/4: #check if waypoint is directly ahead within some window

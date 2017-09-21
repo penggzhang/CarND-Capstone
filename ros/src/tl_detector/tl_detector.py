@@ -378,7 +378,7 @@ class TLDetector(object):
         if self.all_stop_line_wps != None and self.car_position != None:
             # Get the location and index of the upcoming nearest traffic light
             stop_line_wp, light_id = self.get_upcoming_stop_line_wp(self.car_position, self.all_stop_line_wps)
-            rospy.loginfo("Upcoming stop line waypoint and index: %s, %s", stop_line_wp, light_id)
+            #rospy.loginfo("Upcoming stop line waypoint and index: %s, %s", stop_line_wp, light_id)
 
             # Find the distance between the car and the upcoming light
             if self.pose != None and self.lights != None:
