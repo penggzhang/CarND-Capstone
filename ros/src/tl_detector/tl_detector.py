@@ -365,8 +365,6 @@ class TLDetector(object):
             if position_tmp != -1:
                 self.car_position = position_tmp
 
-        #TODO find the closest visible traffic light (if one exists)
-
         #Find the closest waypoint for each traffic light
         if self.all_light_wps == None and self.waypoints != None:
             self.all_light_wps = self.get_all_light_wps(self.config['light_positions'])
@@ -383,7 +381,7 @@ class TLDetector(object):
                 distance_to_light = self.get_distance_between_poses(self.pose.pose, self.lights[light_id].pose.pose)
 
                 # Publish the message of UpcomingLight (To be discussed with Chen)
-                upcoming_msg = self.generate_upcominglight_msg(light_wp, light_id, self.lights[light_id].pose.pose)
+                upcoming_msg = self.generate_upcominglight_msg(light_wp, light_id, self.lights[light_id].pose)
                 self.upcoming_light_pub.publish(upcoming_msg)
 
                 # Check if the car is in the range of VISIBLE_DISTANCE in order to proceed with the classification
@@ -395,7 +393,6 @@ class TLDetector(object):
             state = self.get_light_state(light)
             return light_wp, state
 
-        self.waypoints = None
         return -1, TrafficLight.UNKNOWN
 
 if __name__ == '__main__':
