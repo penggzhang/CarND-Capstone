@@ -89,6 +89,7 @@ class DBWNode(object):
                 proposed_linear_velocity   = self.twist_cmd.linear.x
                 proposed_angular_velocity  = self.twist_cmd.angular.z
                 current_linear_velocity    = self.current_velocity.linear.x
+                current_angular_velocity    = self.current_velocity.angular.z
                 self.CTE, self.heading_err = self.Compute_CTE()
                 dbw_status                 = self.dbw_enabled 
                 if DEBUG:
@@ -101,10 +102,12 @@ class DBWNode(object):
                 throttle, brake, steering = self.controller.control(proposed_linear_velocity,
                                                                     proposed_angular_velocity,
                                                                     current_linear_velocity,
+                                                                    current_angular_velocity,
                                                                     self.CTE,
                                                                     proposed_angular_velocity,
                                                                     dbw_status)
 
+                
                 # update info for estimating decel
                 self.brake_prev = self.brake_new
                 self.brake_new = brake
