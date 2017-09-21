@@ -3,26 +3,27 @@
 import os
 import csv
 import math
+
+from geometry_msgs.msg import Quaternion
+
+from styx_msgs.msg import Lane, Waypoint
+
 import tf
 import rospy
 
-from geometry_msgs.msg import Quaternion
-from styx_msgs.msg import Lane, Waypoint
-
 CSV_HEADER = ['x', 'y', 'z', 'yaw']
 MAX_DECEL = 1.0
+
 
 class WaypointLoader(object):
 
     def __init__(self):
         rospy.init_node('waypoint_loader', log_level=rospy.DEBUG)
 
-        self.pub = rospy.Publisher('/base_waypoints', Lane, queue_size=1)
+        self.pub = rospy.Publisher('/base_waypoints', Lane, queue_size=1, latch=True)
 
-        self.velocity   = rospy.get_param('~velocity')
-        self.yaw_in_deg = rospy.get_param('~yaw_in_deg')
+        self.velocity = rospy.get_param('~velocity')
         self.new_waypoint_loader(rospy.get_param('~path'))
-        
         rospy.spin()
 
     def new_waypoint_loader(self, path):
@@ -48,10 +49,7 @@ class WaypointLoader(object):
                 p.pose.pose.position.x = float(wp['x'])
                 p.pose.pose.position.y = float(wp['y'])
                 p.pose.pose.position.z = float(wp['z'])
-                yaw = float(wp['yaw'])
-                if self.yaw_in_deg == 1:
-                    yaw = math.pi/180*yaw # degrees to radians
-                q = self.quaternion_from_yaw(yaw)
+                q = self.quaternion_from_yaw(float(wp['yaw']))
                 p.pose.pose.orientation = Quaternion(*q)
                 p.twist.twist.linear.x = float(self.velocity*0.27778)
 
@@ -74,14 +72,11 @@ class WaypointLoader(object):
         return waypoints
 
     def publish(self, waypoints):
-        rate = rospy.Rate(1) # 40 Hz Udacity original code
-        while not rospy.is_shutdown():
-            lane = Lane()
-            lane.header.frame_id = '/world'
-            lane.header.stamp = rospy.Time(0)
-            lane.waypoints = waypoints
-            self.pub.publish(lane)
-            rate.sleep()
+        lane = Lane()
+        lane.header.frame_id = '/world'
+        lane.header.stamp = rospy.Time(0)
+        lane.waypoints = waypoints
+        self.pub.publish(lane)
 
 
 if __name__ == '__main__':
