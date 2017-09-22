@@ -180,10 +180,10 @@ class TLDetector(object):
 
 
     def get_all_stop_line_wps(self, stop_line_positions):
-        """Find the closest waypoint for each traffic light
+        """Find the closest waypoint for each stop line in front of a traffic light
 
         Args:
-            light_positions: list of 2D (x, y) position of all stop lines for traffic lights
+            stop_line_positions: list of 2D (x, y) position of all stop lines for traffic lights
 
         Returns:
             all_stop_line_wps: list of waypoint indices
@@ -199,7 +199,7 @@ class TLDetector(object):
             wp = self.get_closest_waypoint(pose)
             all_stop_line_wps.append(wp)
 
-        rospy.loginfo("Waypoint indices of all lights: %s", all_stop_line_wps)
+        #rospy.loginfo("Waypoint indices of all stop lines in front of lights:\n %s", all_stop_line_wps)
         return all_stop_line_wps
 
 
@@ -341,11 +341,24 @@ class TLDetector(object):
         return stop_line_wp, light_id
 
 
-    def generate_upcominglight_msg(self, waypoint, id, pose):
+    def generate_upcominglight_msg(self, waypoint, id, pose, state):
+        """Generate upcoming light message
+
+        Args:
+            waypoint: index of waypoint closest to the stop line in front of a traffic light
+            id      : index of the traffic light in TrafficLightArray
+            pose    : light pose obtained from /vehicle/traffic_lights
+            state   : true light state obtained from /vehicle/traffic_lights
+
+        Returns:
+            msg: message of UpcomingLight type 
+
+        """
         msg = UpcomingLight()
         msg.waypoint = waypoint
         msg.index = id
         msg.pose = pose
+        msg.state = state
         return msg
 
 
@@ -378,14 +391,16 @@ class TLDetector(object):
         if self.all_stop_line_wps != None and self.car_position != None:
             # Get the location and index of the upcoming nearest traffic light
             stop_line_wp, light_id = self.get_upcoming_stop_line_wp(self.car_position, self.all_stop_line_wps)
-            rospy.loginfo("Upcoming stop line waypoint and index: %s, %s", stop_line_wp, light_id)
+            #rospy.loginfo("Upcoming stop line waypoint and index: %s, %s", stop_line_wp, light_id)
 
             # Find the distance between the car and the upcoming light
             if self.pose != None and self.lights != None:
                 distance_to_light = self.get_distance_between_poses(self.pose.pose, self.lights[light_id].pose.pose)
 
-                # Publish the message of UpcomingLight (To be discussed with Chen)
-                upcoming_msg = self.generate_upcominglight_msg(stop_line_wp, light_id, self.lights[light_id].pose)
+                # Publish the message of UpcomingLight (including true light state)
+                # As Teaching Assistant noted in Slack, topic /vehicle/traffic_lights containing true light state
+                # will also be available and published on Carla in site.
+                upcoming_msg = self.generate_upcominglight_msg(stop_line_wp, light_id, self.lights[light_id].pose, self.lights[light_id].state)
                 self.upcoming_light_pub.publish(upcoming_msg)
 
                 # Check if the car is in the range of VISIBLE_DISTANCE in order to proceed with the classification
