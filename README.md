@@ -78,4 +78,8 @@ The steering control system has 3 main components:
 2. Feedforward steering angle command
 3. Feedback steering angle command
 
-Setpoint determination is done within the pure_pursuit.cpp module.
+Setpoint determination is done within the `waypoint_follower` module, specifically in `pure_pursuit_core.cpp`.  The function fits a curve to the desired waypoints, then uses the curvature (rad/m) and desired linear velocity (m/sec) to calculate the corresponding angular velocity (rad/sec).
+
+The feedforward steering angle command is calculated in the `twist_controller` module, in `twist_controller.py` and `yaw_controller.py`. transforms the desired angular velocity (rad/sec), desired linear velocity (m/sec) and current linear velocity (m/sec) into a steering wheel angle (rad).  The desired velocities are available in `ROS Topic: /twist_cmd` while the current velocities are available in `ROS Topic: /current_velocity`.
+
+The feedback steering angle command is calculated in `twist_controller.py`.  The error is calculated as the difference between the measured angular velocity and the desired angular velocity.  PID control is applied to this error term.  A deadzone is applied to the angular velocity error in order to minimize steering corrections (integral windup, oscillation) when very near the setpoint.  The desired velocities are available in `ROS Topic: /twist_cmd` while the current velocities are available in `ROS Topic: /current_velocity`.
