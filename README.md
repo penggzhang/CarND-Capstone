@@ -70,4 +70,12 @@ rosbag play -l traffic_light_bag_files/loop_with_traffic_light.bag
 cd CarND-Capstone/ros
 roslaunch launch/site.launch
 ```
+## Control Systems
 
+### Steering
+The steering control system has 3 main components:
+1. Angular velocity setpoint determination
+2. Feedforward steering angle command
+3. Feedback steering angle command
+
+Setpoint determination is done within the pure_pursuit.cpp module.
