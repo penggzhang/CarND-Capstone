@@ -1,0 +1,33 @@
+------------------------------------------------------------
+Pipeline for dataset cleaning and TF-Record generating
+------------------------------------------------------------
+
+1. Collect raw data with bounding boxes labeled
+TODO: automatic conversion tool
+
+2. Clean raw data and create full labels into a csv file
+    - Class N and corresponding labels in csv files were removed for classes consistency.
+	- Missing or incorrectly-labeled bounding boxes were manually checked and corrected in csv files.
+	- Script: 'create_labels_csv.py'
+	- This script is ad-hoc for previously generated data from the simulator.
+
+3. Split full labels into training and test sets
+	- Script: 'split_labels.ipynb'
+
+4. Generate TF-Record
+	- Script: 'generate_tfrecord.py'
+
+
+------------------------------------------------------------
+Dataset shared on Google Cloud Storage
+------------------------------------------------------------
+Link to the latest dataset: 
+    https://drive.google.com/open?id=0B7V-T1M-MhZpTTZrcVNadko3VUE
+
+    including the dataset for simulator case:
+    	- Training and test TF-Records 
+    	- /images: all renamed images
+    	- /processed_images_cleaned: raw images labeled with bounding boxes (Note: images are not being cleaned, cleaned means box labels were checked in their corresponding csv records.)
+
+Link to raw dataset:
+    https://drive.google.com/file/d/0B2Jb8780utm1QmxXaGYydGt2OTg/view?usp=drive_web
