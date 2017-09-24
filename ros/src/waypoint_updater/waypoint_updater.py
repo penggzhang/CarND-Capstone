@@ -41,7 +41,7 @@ DEBUG_TOPICS  = False    # Enable debug output topics
 SIMULATE_TL   = False    # True = Simulate traffic light positions with /vehicle/traffic_lights, False = use tl_detector /upcoming_light topic
 DEBUG_TLDET   = False    # True = Print TL_DETECTOR topic debug information
 DEBUG_TLSIM   = False    # True = Print traffic light information from simulator data debug information
-DEBUG_TGTSPD  = True     # True = Print debug information for target velocity calculations
+DEBUG_TGTSPD  = False    # True = Print debug information for target velocity calculations
 DEBUG_SEARCH  = False    # True = Pring debug information on searching the base_waypoints for our current position
 
 class WaypointUpdater(object):
