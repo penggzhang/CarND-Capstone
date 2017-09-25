@@ -71,6 +71,22 @@ cd CarND-Capstone/ros
 roslaunch launch/site.launch
 ```
 ## Control Systems
+There are three closed-loop controllers present for the vehicle motion control:
+1. Throttle (accelerator pedal)
+2. Braking
+3. Steering
+
+Each of these uses a PID controller.  The throttle and braking controllers are mutually exclusive; when one of the controllers is active the other is held in reset, and vice versa.
+
+### Throttle
+The throttle controller is strictly a feedback controller.  There is no feedforward throttle calculation based on speed sepoint.  The velocity error is the current desired linear velocity (m/sec) minus the current linear velocity (m/sec).  The desired velocities are available in `ROS Topic: /twist_cmd` while the current velocities are available in `ROS Topic: /current_velocity`.
+
+The throttle controller is active when `vel_err > 0.0`.  Otherwise, the throttle controller is reset, and the brake controller is utilized.
+
+### Brake
+The brake controller is strictly a feedback controller.  There is no feedforward brake calculation based on speed sepoint.  The velocity error is the current desired linear velocity (m/sec) minus the current linear velocity (m/sec).  The desired velocities are available in `ROS Topic: /twist_cmd` while the current velocities are available in `ROS Topic: /current_velocity`.
+
+The brake controller is active when `vel_err <= 0.0`.  Otherwise, the brake controller is reset, and the throttle controller is utilized.
 
 ### Steering
 The steering control system has 3 main components:
