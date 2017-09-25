@@ -91,7 +91,7 @@ if vel_sq < 0.0:
 self.target_speed_mps = math.sqrt(vel_sq)
 ```
 
-Detailed derivations of these calculation are available here %%%%%.
+Detailed derivations of these calculation are available here (INSERT REFERENCE).
 
 ## Control Systems
 There are three closed-loop controllers present for the vehicle motion control:
