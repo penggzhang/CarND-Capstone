@@ -82,4 +82,73 @@ Setpoint determination is done within the `waypoint_follower` module, specifical
 
 The feedforward steering angle command is calculated in the `twist_controller` module, in `twist_controller.py` and `yaw_controller.py`. transforms the desired angular velocity (rad/sec), desired linear velocity (m/sec) and current linear velocity (m/sec) into a steering wheel angle (rad).  The desired velocities are available in `ROS Topic: /twist_cmd` while the current velocities are available in `ROS Topic: /current_velocity`.
 
-The feedback steering angle command is calculated in `twist_controller.py`.  The error is calculated as the difference between the measured angular velocity and the desired angular velocity.  PID control is applied to this error term.  A deadzone is applied to the angular velocity error in order to minimize steering corrections (integral windup, oscillation) when very near the setpoint.  The desired velocities are available in `ROS Topic: /twist_cmd` while the current velocities are available in `ROS Topic: /current_velocity`.
+The feedback steering angle command is calculated in `twist_controller.py`.  Two different methods were evaluated for this controller:
+1. Cross track error (CTE) based PID control
+2. Angular velocity error based PID control
+
+#### Cross Track Error Based PID Control
+The error is calculated as the normal distance between the vehicle and line-of-best-fit of the waypoints, with a 3rd order polynomial.  PID control is applied to this error term.  CTE is calculated in `dbw_node.py`.
+
+```Python
+def Compute_CTE(self):
+    # Similar to the MPC project we need to convert from global coordinates to local car body coordinates
+    # First translate and then rotate
+        
+    global_car_x = self.current_pose.x
+    global_car_y = self.current_pose.y
+        
+    roll,pitch,yaw = tf.transformations.euler_from_quaternion([self.current_orient.x,self.current_orient.y,self.current_orient.z,self.current_orient.w])
+    yaw = -1.*yaw
+        
+    x_car_body = []
+    y_car_body = []
+        
+    for idx,wpt in enumerate(self.finalwpts):
+        del_x = wpt.pose.pose.position.x - global_car_x
+        del_y = wpt.pose.pose.position.y - global_car_y
+            
+        temp1 =  del_x*math.cos(yaw) - del_y*math.sin(yaw)
+        temp2 =  del_x*math.sin(yaw) + del_y*math.cos(yaw)
+            
+        x_car_body.append(temp1)
+        y_car_body.append(temp2)
+        
+    # As with MPC project, fit a 3rd order polynomial that fits most roads    
+    coeff_3rd = np.polyfit(x_car_body,y_car_body,3)       
+    CTE       = np.polyval(coeff_3rd,0.0)
+        
+    #Limit CTE to +/-5 which is empirically the limits of the lanes 0 and 2
+    if CTE > 5.0:
+        CTE = 5.0
+    if CTE < -5.0:
+        CTE = -5.0       
+        
+    return CTE
+```
+
+#### Angular Velocity Error Based PID Control
+The error is calculated as the difference between the measured angular velocity and the desired angular velocity.  PID control is applied to this error term.  A deadzone is applied to the angular velocity error in order to minimize steering corrections (integral windup, oscillation) when very near the setpoint.  The desired velocities are available in `ROS Topic: /twist_cmd` while the current velocities are available in `ROS Topic: /current_velocity`.
+
+```Python
+# Compute angular velocity error
+ang_err = proposed_angular_velocity - current_angular_velocity
+
+# deadband
+if ang_err >= 0.005:
+    ang_err -= 0.005
+elif ang_err <= -0.005:
+    ang_err += 0.005
+else:
+    ang_err = 0.0
+
+# upper limit
+if ang_err >= 0.25:
+    ang_err = 0.25
+elif ang_err <= -0.25:
+    ang_err += 0.25
+
+ang_err = self.LPFilt_Str.filt(ang_err)
+```
+
+#### Final Steering Control Design
+The CTE based control was chosen in the end as it performed more robustly to momentary spikes in error signal (these may be artifacts of the simulator, or discontinuities in the waypoint calculations).
