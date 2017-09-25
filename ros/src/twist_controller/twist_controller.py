@@ -6,7 +6,7 @@ import rospy
 
 #GAS_DENSITY = 2.858   # TODO: Figure out why we need this - fuel in tank sloshing?
 ONE_MPH     = 0.44704 # MPH to M/S conversion
-DEBUG_STEER = True
+DEBUG_STEER = False
 STEER_CTE = True # True uses CTE error for PID, False uses angular velocity error
 
 class Controller(object):
