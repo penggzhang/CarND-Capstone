@@ -70,6 +70,29 @@ rosbag play -l traffic_light_bag_files/loop_with_traffic_light.bag
 cd CarND-Capstone/ros
 roslaunch launch/site.launch
 ```
+
+## Waypoint Update
+The geographical `x,y,z` position of the path waypoints are provided.  The waypoint updater must calculate the desired velocity (m/sec) at each of the waypoints.  
+
+For the case where there is no red light within the stop horizon `STOP_DIST_ERR` the desired velocity determination is trivially set to a constant value `SPEED_MPH*MPH2MPS`.
+
+For the case where there is a stop light ahead, the determination of the desired velocity at the upcoming waypoints is more involved.  The key concept is the planning determines the constant deceleration necessary to stop at the stop line, then back calculates the velocity of each waypoint leading up to the stop line.
+
+The constant deceleration is calculated as shown below:
+```Python
+decel_mpss = -1.*(vel_i * vel_i / pos_stopline)/2
+```
+
+For each waypoint between the vehicle's current location and the stopline, `decel_mpss` is then used to calculate the desired velocity as~
+```Python
+vel_sq = vel_i * vel_i + 2.*decel_mpss*pos_stopline
+if vel_sq < 0.0:
+    vel_sq = 0.0
+self.target_speed_mps = math.sqrt(vel_sq)
+```
+
+Detailed derivations of these calculation are available here %%%%%.
+
 ## Control Systems
 There are three closed-loop controllers present for the vehicle motion control:
 1. Throttle (accelerator pedal)
