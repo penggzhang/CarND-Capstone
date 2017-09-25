@@ -1,0 +1,12 @@
+%%
+clear;
+fplotcsv('churchlot_with_cars_modified.csv');
+%%
+clear;
+fplotcsv('sim_waypoints.csv');
+%%
+clear;
+fplotcsv('wp_yaw_const.txt');
+%%
+clear;
+fplotcsv('wp_yaw.txt');
