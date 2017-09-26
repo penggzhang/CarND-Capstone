@@ -10,16 +10,37 @@ from light_classification.tl_classifier import TLClassifier
 import tf
 import cv2
 import yaml
-import sys
+import sys, os
 import math
 import numpy as np
 from light_msgs.msg import UpcomingLight
 
 from tl_debug import TLDebug
 
-STATE_COUNT_THRESHOLD = 3
+
+#####################################################
+# Build a dictionary for paths to model checkpoints
+
+path_to_models = os.path.dirname(os.path.realpath(__file__)) + '/light_classification/models'
+CKPT_DICT = {0: path_to_models + '/graph_ssd_mobilenet_sim_v1.pb'}
+
+##################
+# Set parameters
 
 VISIBLE_DISTANCE = 200
+
+# On/Off switch for classifier. True: run classifier.
+CLF_ON = True
+
+# Classifier is on, then whether or not use the predicted light state. 
+# True: use it. Otherwise, use true light state from TrafficLightArray message.
+# Note: set True only if CLF_ON is True.
+USE_PREDICTION = False
+
+# Choose a model checkpoint by specifying its id in CKPT_DICT
+CKPT_ID = 0
+
+STATE_COUNT_THRESHOLD = 3
 
 class TLDetector(object):
     def __init__(self):
@@ -43,15 +64,18 @@ class TLDetector(object):
         rely on the position of the light and the camera image to predict it.
         '''
         sub3 = rospy.Subscriber('/vehicle/traffic_lights', TrafficLightArray, self.traffic_cb)
-        sub6 = rospy.Subscriber('/image_color', Image, self.image_cb)
-
+        
         config_string = rospy.get_param("/traffic_light_config")
         self.config = yaml.load(config_string)
 
         self.upcoming_red_light_pub = rospy.Publisher('/traffic_waypoint', Int32, queue_size=1)
 
         self.bridge = CvBridge()
-        self.light_classifier = TLClassifier()
+
+        # Initialize classifier with specified model checkpoint
+        if CLF_ON is True:
+            self.light_classifier = TLClassifier(CKPT_DICT[CKPT_ID])
+
         self.listener = tf.TransformListener()
 
         self.state = TrafficLight.UNKNOWN
@@ -67,6 +91,8 @@ class TLDetector(object):
 
         # Debug Publisher
         self.debug = TLDebug()
+
+        sub6 = rospy.Subscriber('/image_color', Image, self.image_cb)
 
         rospy.spin()
 
@@ -262,11 +288,12 @@ class TLDetector(object):
             #rospy.loginfo("Point in camera coords: %s", camera_point)
 
             # Perspective Correction
-            #Instead of using the focal lengths in 'sim_traffic_light_config.yaml',
-            #experiment by hard coding with some trial values in correct magnitude.
-            #TODO: wait course teaching asisstant to classify on focal lengths
-            #and then locate the crop window.
-            fx, fy = 1200, 800
+            # Instead of using the focal lengths in 'sim_traffic_light_config.yaml',
+            # experiment with values in 'site_traffic_light_config.yaml'.
+            #
+            # TODO: Try some regression to find focal lengths for simulator case.
+            #
+            fx, fy = 1345, 1353
             x = int(-fx * camera_point[1] / camera_point[0] + image_width  / 2)
             y = int(-fy * camera_point[2] / camera_point[0] + image_height / 2)
 
@@ -292,21 +319,20 @@ class TLDetector(object):
         x, y = self.project_to_image_plane(light.pose.pose.position)
         #rospy.loginfo("Projected point: (%s, %s)", x, y)
         
-        #TODO use light location to zoom in on traffic light in image
-        distance_car_tl = self.get_distance_between_poses(self.pose.pose, light.pose.pose) # Need the real distance
-
-        #TODO Define logic for Zoom based on distance... bigger distance to traffic light, smaller crop area
-
         #TODO Prepare the image to be classified
         #crop_image = cv_image[y-20:y+130, x-40:x+40]
         #resized_image = cv2.resize(crop_img, (80, 150)) 
+
+        distance_car_tl = self.get_distance_between_poses(self.pose.pose, light.pose.pose) # Need the real distance
 
         #Publishing Images and metadata for debug and dataset generator
         self.debug.publish_debug_image(cv_image, distance_car_tl, x, y) # Publishing in /debug/image_tl Use 'rqt' to visualize the image
         self.debug.publish_debug_image_metadata(cv_image, 0, y-20, x-40, y+130, x+40) # Publishing in /debug/image_tl_metadata
 
         #Get classification
-        #return self.light_classifier.get_classification(cv_image)
+        if self.light_classifier != None:
+            return self.light_classifier.get_classification(cv_image, (x, y))
+
         return TrafficLight.UNKNOWN
 
 
@@ -409,8 +435,15 @@ class TLDetector(object):
 
         # 2 - Check if light is available, then try to identify the color
         if light:
-            state = self.get_light_state(light)
-            return stop_line_wp, state
+            pred_state = self.get_light_state(light)
+            rospy.loginfo("Predicted light state: %s", pred_state)
+            
+            # Use predicted light state
+            if USE_PREDICTION:
+                return stop_line_wp, pred_state
+
+            # Use true light state
+            return stop_line_wp, self.lights[light_id].state
 
         return -1, TrafficLight.UNKNOWN
 
