@@ -55,9 +55,9 @@ class WPT_Visualization:
             if len(self.pose) > 0:
                 self.pose.pop(0).remove()
             self.pose = pyplot.plot(msg.pose.position.y, msg.pose.position.x, 'rs', markersize=5, zorder=5)
-            axes = pyplot.gca()
-            axes.set_ylim([msg.pose.position.x-10,msg.pose.position.x+10])
-            axes.set_xlim([msg.pose.position.y-10,msg.pose.position.y+10])
+            #axes = pyplot.gca()
+            #axes.set_ylim([msg.pose.position.x-10,msg.pose.position.x+10])
+            #axes.set_xlim([msg.pose.position.y-10,msg.pose.position.y+10])
             pyplot.xlabel('Global Y')
             pyplot.ylabel('Global X')
             pyplot.draw()

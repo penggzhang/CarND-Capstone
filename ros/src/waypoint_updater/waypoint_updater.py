@@ -30,14 +30,14 @@ SPEED_MPH     = 20.      # Forward speed in miles per hour
 STOP_LINE     = 29.      # Distance in meters to stop in front of stoplight, corresponds to white stop line
 STOP_DIST_ERR = 9.       # Distance to start applying brakes ahead of STOP_LINE
 LL_WPT_SEARCH = 3        # Number of waypoints behind to search over to detect new waypoint ahead from previous nearest waypoint
-UL_WPT_SEARCH = 50       # Number of waypoints ahead to search over to detect new waypoint ahead from previous nearest waypoint
+UL_WPT_SEARCH = 20       # Number of waypoints ahead to search over to detect new waypoint ahead from previous nearest waypoint
 
 # CONSTANTS
 MPH2MPS       = 0.44704  # Conversion miles per hour to meters per second
 
 # DEBUG FLAGS
 DEBUG         = False    # True = Print Statements appear in Terminal with Debug info
-DEBUG_TOPICS  = False    # Enable debug output topics
+DEBUG_TOPICS  = True     # Enable debug output topics
 SIMULATE_TL   = False    # True = Simulate traffic light positions with /vehicle/traffic_lights, False = use tl_detector /upcoming_light topic
 DEBUG_TLDET   = False    # True = Print TL_DETECTOR topic debug information
 DEBUG_TLSIM   = False    # True = Print traffic light information from simulator data debug information
@@ -81,6 +81,7 @@ class WaypointUpdater(object):
         self.search_range     = None
         self.target_speed_mps = SPEED_MPH*MPH2MPS
         self.dist2light_m     = 9999.
+        self.prev_wpt_ahead_idx = 0.
         rospy.spin()
         
     def loop(self): 
@@ -95,7 +96,7 @@ class WaypointUpdater(object):
             if False:
                 print('WPT Ahead        ',"x: ",self.wpt_ahead.pose.pose.position.x,"y: ",self.wpt_ahead.pose.pose.position.y,"idx: ",self.wpt_ahead_idx)
                 print('WPT List Length: ', len(self.waypoints)) 
-            
+                            
             # Form final waypoint list starting from the waypoint directly ahead
             final_wpt_idx = self.wpt_ahead_idx+LOOKAHEAD_WPS
             if final_wpt_idx < len(self.waypoints): # protect against wrapping around the waypoints array
@@ -276,29 +277,33 @@ class WaypointUpdater(object):
         # Narrow the search range so we don't need to search the whole \base_waypoints set
         if self.wpt_ahead_idx != None:
             # Handle the case where we wrap around the 0 index of the waypoints
-            if self.wpt_ahead_idx+UL_WPT_SEARCH < len(self.waypoints):
+            if self.wpt_ahead_idx+UL_WPT_SEARCH <= len(self.waypoints):
                         
                 lower_lim = self.wpt_ahead_idx
                 upper_lim = self.wpt_ahead_idx+UL_WPT_SEARCH
                 
                 if DEBUG_SEARCH:
                         print("--------------------------------------")
-                        print("len(self.waypoints) ", len(self.waypoints))
-                        print("wpt_ahead_idx ", self.wpt_ahead_idx) 
-                        print("wpt_ahead_idx-LL_WPT_SEARCH ", lower_lim) 
+                        print("wpt_ahead_idx               ", self.wpt_ahead_idx) 
                         print("wpt_ahead_idx+UL_WPT_SEARCH ", upper_lim)
                     
                 self.search_range = range(lower_lim,upper_lim)
             else:
                 idx_prev_0        = len(self.waypoints) - self.wpt_ahead_idx
                 idx_past_0        = UL_WPT_SEARCH - idx_prev_0
-                range_behind0     = range(idx_prev_0,len(self.waypoints))
+                if idx_prev_0 == 0:
+                    range_behind0     = len(self.waypoints)
+                else:
+                    range_behind0     = range(self.wpt_ahead_idx,len(self.waypoints))
                 range_ahead0      = range(0,idx_past_0)
                 self.search_range = range_behind0+range_ahead0
                 if DEBUG_SEARCH:
+                    print("--------------------------------------")
                     print("wpt_ahead_idx ", self.wpt_ahead_idx) 
-                    print("idx_prev_0 ", idx_prev_0) 
-                    print("idx_past_0 ", idx_past_0)
+                    print("idx_prev_0    ", idx_prev_0) 
+                    print("idx_past_0    ", idx_past_0)
+                    print("range_behind0 ", range_behind0)
+                    print("range_ahead0  ", range_ahead0)
                              
         # Loop over \base_waypoints and find the nearest wpt in front of us   
         for idx in self.search_range:
@@ -311,6 +316,14 @@ class WaypointUpdater(object):
                 self.wpt_ahead_idx = idx
                 closestlen         = dist
                 stored_brg         = brg
+        #print('stored_brg, self.wpt_ahead_idx, closestlen: ', stored_brg, self.wpt_ahead_idx, closestlen)
+        if self.prev_wpt_ahead_idx > self.wpt_ahead_idx:
+            rospy.loginfo('Computed waypoint ahead index %i is less than previous waypoint ahead index %i',self.wpt_ahead_idx,self.prev_wpt_ahead_idx)
+        
+        if self.wpt_ahead_idx > self.prev_wpt_ahead_idx + 10:
+            rospy.loginfo('Computed waypoint ahead index %i is at least 10 more than previous waypoint ahead index %i',self.wpt_ahead_idx,self.prev_wpt_ahead_idx)
+        
+        self.prev_wpt_ahead_idx = self.wpt_ahead_idx
         pass
     
     # When a message is recieved from /base_waypoints topic store it

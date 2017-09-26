@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<launch>
+    <!-- ROS Bag Playback -->
+    <node pkg="rosbag" type="play" name="player" output="screen" args="--clock /home/honeywell/Desktop/UDACITY/Term3/MyRepo/CarND-Capstone/rosbags/udacity/udacity_succesful_light_detection.bag --topic /base_waypoints /current_pose /current_velocity"/>
+    
+    <!--DBW Node -->
+    <include file="$(find twist_controller)/launch/dbw.launch"/>
+
+    <!--Waypoint Follower Node -->
+    <include file="$(find waypoint_follower)/launch/pure_pursuit.launch"/>
+
+    <!--Waypoint Updater Node -->
+    <include file="$(find waypoint_updater)/launch/waypoint_updater.launch"/>
+
+    <!--Traffic Light Locations and Camera Config -->
+    <param name="traffic_light_config" textfile="$(find tl_detector)/site_traffic_light_config.yaml" />
+
+    <!--Traffic Light Detector Node -->
+    <include file="$(find tl_detector)/launch/tl_detector_site.launch"/>
+
+    <!--Waypoint Visualization Node -->
+    <include file="$(find wpt_visualization)/launch/wpt_visualization.launch"/>
+</launch>
