@@ -76,7 +76,7 @@ The geographical `x,y,z` position of the path waypoints are provided.  The waypo
 
 For the case where there is no red light within the stop horizon `STOP_DIST_ERR` the desired velocity determination is trivially set to a constant value `SPEED_MPH*MPH2MPS`.
 
-For the case where there is a stop light ahead, the determination of the desired velocity at the upcoming waypoints is more involved.  The key concept is the planning determines the constant deceleration necessary to stop at the stop line, then back calculates the velocity of each waypoint leading up to the stop line.
+For the case where there is a red stop light ahead, the determination of the desired velocity at the upcoming waypoints is more involved.  The key concept is the planning determines the constant deceleration necessary to stop at the stop line, then back calculates the velocity of each waypoint leading up to the stop line.
 
 The constant deceleration is calculated as shown below:
 ```Python
