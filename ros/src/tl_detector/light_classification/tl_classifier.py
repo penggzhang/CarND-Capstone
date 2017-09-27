@@ -14,7 +14,7 @@ import rospy
 
 
 # Minimum score (confidence) for a light detection
-SCORE_THRESHOLD = 0.1
+SCORE_THRESHOLD = 0.5
 
 NUM_CLASSES = 4
 
