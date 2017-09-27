@@ -26,7 +26,7 @@ TODO (for Yousuf and Aaron): Stopline location for each traffic light.
 
 # TUNABLE PARAMETERS
 LOOKAHEAD_WPS = 30       # Number of waypoints published
-SPEED_MPH     = 20.      # Forward speed in miles per hour
+SPEED_MPH     = 10.      # Forward speed in miles per hour
 STOP_LINE     = 29.      # Distance in meters to stop in front of stoplight, corresponds to white stop line
 STOP_DIST_ERR = 9.       # Distance to start applying brakes ahead of STOP_LINE
 LL_WPT_SEARCH = 3        # Number of waypoints behind to search over to detect new waypoint ahead from previous nearest waypoint
@@ -169,7 +169,8 @@ class WaypointUpdater(object):
                     
                 else:
                     # Car goes at normal speed
-                    self.target_speed_mps = SPEED_MPH*MPH2MPS
+                    self.target_speed_mps = wpt.twist.twist.linear.x #SPEED_MPH*MPH2MPS
+                    
                 
                 # Set speeds in waypoint list
                 wpt.twist.twist.linear.x = self.target_speed_mps
