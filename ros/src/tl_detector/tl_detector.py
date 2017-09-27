@@ -18,29 +18,46 @@ from light_msgs.msg import UpcomingLight
 from tl_debug import TLDebug
 
 
-#####################################################
-# Build a dictionary for paths to model checkpoints
+#################################
+# Build a dictionary for models
 
 path_to_models = os.path.dirname(os.path.realpath(__file__)) + '/light_classification/models'
-CKPT_DICT = {0: path_to_models + '/graph_ssd_mobilenet_sim_v1.pb'}
+
+# Dictionary for model checkpoints, label maps and numbers of classes
+MODEL_DICT = {1: (path_to_models + '/graph_frcnn_resnet_sim_bosch.pb',
+                  path_to_models + '/label_map_bosch.pbtxt',
+                  14),
+              2: (path_to_models + '/graph_ssd_mobilenet_sim.pb',
+                  path_to_models + '/label_map_udacity.pbtxt',
+                  4),              
+              3: (path_to_models + '/graph_frcnn_resnet_real_bosch.pb',
+                  path_to_models + '/label_map_bosch.pbtxt',
+                  14)
+              }
 
 ##################
 # Set parameters
 
 VISIBLE_DISTANCE = 200
 
-# On/Off switch for classifier. True: run classifier.
+# Choose a model checkpoint by specifying its id in CKPT_DICT
+MODEL_ID = 1
+
+# On/Off switch for classifier.
 CLF_ON = True
 
-# Classifier is on, then whether or not use the predicted light state. 
-# True: use it. Otherwise, use true light state from TrafficLightArray message.
+# Use the predicted light state. 
+# Otherwise, use true light state from TrafficLightArray message.
 # Note: set True only if CLF_ON is True.
-USE_PREDICTION = False
+USE_PREDICTION = True
 
-# Choose a model checkpoint by specifying its id in CKPT_DICT
-CKPT_ID = 0
+# Minimum score (confidence) for a light detection
+SCORE_THRESHOLD = 0.5
 
 STATE_COUNT_THRESHOLD = 3
+
+##################
+
 
 class TLDetector(object):
     def __init__(self):
@@ -49,9 +66,20 @@ class TLDetector(object):
         self.pose = None
         self.waypoints = None
         self.camera_image = None
-        self.lights = []
 
+        self.state = TrafficLight.UNKNOWN
+        self.last_state = TrafficLight.UNKNOWN
+        self.last_wp = -1
+        self.state_count = 0
+
+        self.lights = []
         self.all_stop_line_wps = None
+
+        #The closest waypoint to car
+        self.car_position = None
+
+        config_string = rospy.get_param("/traffic_light_config")
+        self.config = yaml.load(config_string)
 
         sub1 = rospy.Subscriber('/current_pose', PoseStamped, self.pose_cb)
         sub2 = rospy.Subscriber('/base_waypoints', Lane, self.waypoints_cb)
@@ -63,28 +91,20 @@ class TLDetector(object):
         simulator. When testing on the vehicle, the color state will not be available. You'll need to
         rely on the position of the light and the camera image to predict it.
         '''
-        sub3 = rospy.Subscriber('/vehicle/traffic_lights', TrafficLightArray, self.traffic_cb)
-        
-        config_string = rospy.get_param("/traffic_light_config")
-        self.config = yaml.load(config_string)
+        sub3 = rospy.Subscriber('/vehicle/traffic_lights', TrafficLightArray, self.traffic_cb)       
 
         self.upcoming_red_light_pub = rospy.Publisher('/traffic_waypoint', Int32, queue_size=1)
 
         self.bridge = CvBridge()
 
-        # Initialize classifier with specified model checkpoint
+        # Initialize classifier with specified parameters
         if CLF_ON is True:
-            self.light_classifier = TLClassifier(CKPT_DICT[CKPT_ID])
+            ckpt, label_map, n_classes = MODEL_DICT[MODEL_ID]
+            self.light_classifier = TLClassifier(ckpt, label_map, n_classes, SCORE_THRESHOLD)
+            self.light_classifier_on = True
+            print("Light classifier is running")
 
         self.listener = tf.TransformListener()
-
-        self.state = TrafficLight.UNKNOWN
-        self.last_state = TrafficLight.UNKNOWN
-        self.last_wp = -1
-        self.state_count = 0
-
-        #The closest waypoint to car
-        self.car_position = None
 
         #Publisher for UpcomingLight message
         self.upcoming_light_pub = rospy.Publisher('/upcoming_light', UpcomingLight, queue_size=1)
@@ -115,6 +135,7 @@ class TLDetector(object):
         """
         self.has_image = True
         self.camera_image = msg
+
         stop_line_wp, state = self.process_traffic_lights()
 
         '''
@@ -188,7 +209,7 @@ class TLDetector(object):
         # http://rosettacode.org/wiki/Closest-pair_problem#Python
         min_distance           = sys.maxsize
         nearest_waypoint_index = -1
-        #rospy.loginfo("Type of self.waypoints: %s", type(self.waypoints))
+        #print("Type of self.waypoints: %s" % type(self.waypoints))
 
         if self.waypoints != None:
             for i in range(0, len(self.waypoints.waypoints)):
@@ -225,7 +246,7 @@ class TLDetector(object):
             wp = self.get_closest_waypoint(pose)
             all_stop_line_wps.append(wp)
 
-        #rospy.loginfo("Waypoint indices of all stop lines in front of lights:\n %s", all_stop_line_wps)
+        #print("Waypoint indices of all stop lines in front of lights:\n %s" % all_stop_line_wps)
         return all_stop_line_wps
 
 
@@ -285,7 +306,7 @@ class TLDetector(object):
             point_in_world_vector = np.array([[point_in_world.x], [point_in_world.y], [point_in_world.z], [1.0]], dtype=float)
             camera_point = np.dot(transformation_matrix, point_in_world_vector)
 
-            #rospy.loginfo("Point in camera coords: %s", camera_point)
+            #print("Point in camera coords: %s" % camera_point)
 
             # Perspective Correction
             # Instead of using the focal lengths in 'sim_traffic_light_config.yaml',
@@ -314,10 +335,10 @@ class TLDetector(object):
             self.prev_light_loc = None
             return False
 
-        cv_image = self.bridge.imgmsg_to_cv2(self.camera_image, "bgr8")
+        cv_image = self.bridge.imgmsg_to_cv2(self.camera_image, "rgb8")
 
         x, y = self.project_to_image_plane(light.pose.pose.position)
-        #rospy.loginfo("Projected point: (%s, %s)", x, y)
+        #print("Projected point: (%s, %s)" %(x, y))
         
         #TODO Prepare the image to be classified
         #crop_image = cv_image[y-20:y+130, x-40:x+40]
@@ -330,7 +351,7 @@ class TLDetector(object):
         self.debug.publish_debug_image_metadata(cv_image, 0, y-20, x-40, y+130, x+40) # Publishing in /debug/image_tl_metadata
 
         #Get classification
-        if self.light_classifier != None:
+        if self.light_classifier_on is True:
             return self.light_classifier.get_classification(cv_image, (x, y))
 
         return TrafficLight.UNKNOWN
@@ -357,7 +378,7 @@ class TLDetector(object):
                 if car_position <= all_stop_line_wps[i]:
                     interval = i
                     break
-        #rospy.loginfo("interval: %s", interval)
+        #print("interval: %s" % interval)
 
         #Find the upcoming light waypoint and index
         #Note: only go one way along an ascending sequence of waypoints
@@ -417,7 +438,7 @@ class TLDetector(object):
         if self.all_stop_line_wps != None and self.car_position != None:
             # Get the location and index of the upcoming nearest traffic light
             stop_line_wp, light_id = self.get_upcoming_stop_line_wp(self.car_position, self.all_stop_line_wps)
-            #rospy.loginfo("Upcoming stop line waypoint and index: %s, %s", stop_line_wp, light_id)
+            #print("Upcoming stop line waypoint and index: %s, %s" % (stop_line_wp, light_id))
 
             # Find the distance between the car and the upcoming light
             if self.pose != None and self.lights != None:
@@ -436,7 +457,7 @@ class TLDetector(object):
         # 2 - Check if light is available, then try to identify the color
         if light:
             pred_state = self.get_light_state(light)
-            rospy.loginfo("Predicted light state: %s", pred_state)
+            print("Predicted light state: %s" % pred_state)
             
             # Use predicted light state
             if USE_PREDICTION:

@@ -13,13 +13,10 @@ import glob, sys
 import rospy
 
 
-# Minimum score (confidence) for a light detection
-SCORE_THRESHOLD = 0.5
-
-NUM_CLASSES = 4
-
 class TLClassifier(object):
-    def __init__(self, path_to_ckpt):
+    def __init__(self, path_to_ckpt, path_to_label_map, num_classes, score_threshold):
+        self.score_threshold = score_threshold
+
         # Default light state
         self.default_state = TrafficLight.UNKNOWN
         #self.default_state = 4 # Debug
@@ -30,10 +27,8 @@ class TLClassifier(object):
         ##################
         # Load label map  
 
-        path_to_label_map = os.path.dirname(path_to_ckpt) + '/label_map.pbtxt'
-
         label_map = label_map_util.load_labelmap(path_to_label_map)
-        categories = label_map_util.convert_label_map_to_categories(label_map, max_num_classes=NUM_CLASSES, use_display_name=True)
+        categories = label_map_util.convert_label_map_to_categories(label_map, max_num_classes=num_classes, use_display_name=True)
         self.category_index = label_map_util.create_category_index(categories)
         
         ############################################
@@ -70,7 +65,7 @@ class TLClassifier(object):
         # Number of objects detected
         self.num_detections = self.detection_graph.get_tensor_by_name('num_detections:0')
 
-        print("Graph loaded")
+        print("Detection graph loaded")
 
 
     def dist_box_center_to_point(self, box, point):
@@ -126,11 +121,13 @@ class TLClassifier(object):
                 feed_dict={self.image_tensor: image_np_expanded})
 
         time1 = time.time()
-        #rospy.loginfo("Time in milliseconds: %s", (time1 - time0) * 1000)
+        #print("Time in milliseconds: %s" % ((time1 - time0) * 1000))
 
         boxes = np.squeeze(boxes)
         scores = np.squeeze(scores)
-        classes = np.squeeze(classes).astype(np.int32) 
+        classes = np.squeeze(classes).astype(np.int32)
+
+        #print("num detections: %s" % num_detections)
 
         # Analyze light state from the detected boxes
         if num_detections[0] > 0:
@@ -144,9 +141,9 @@ class TLClassifier(object):
 
                 # If detection confidence on this box is above threshold,
                 # then we analyze and collect the state and box. 
-                if scores[i] > SCORE_THRESHOLD:
+                if scores[i] > self.score_threshold:
                     class_name = self.category_index[classes[i]]['name']
-                    #rospy.loginfo("class name: %s", class_name)
+                    #print("Detected box: %s" % class_name)
 
                     state = TrafficLight.UNKNOWN
                     if class_name == 'Red':
@@ -178,25 +175,3 @@ class TLClassifier(object):
                 return self.vote_on_states(states, boxes_filtered, projection_point)
 
         return self.default_state
-
-
-# Debug
-# def load_image_into_numpy_array(image):  
-#   (im_width, im_height) = image.size  
-#   return np.array(image.getdata()).reshape(  
-#       (im_height, im_width, 3)).astype(np.uint8)
-
-# if __name__ == '__main__':
-#     path_to_ckpt = os.path.dirname(os.path.realpath(__file__)) + '/models/graph_ssd_mobilenet_sim_v1.pb'
-#     clf = TLClassifier(path_to_ckpt)
-
-#     test_image_path = '/Users/betterlife/car/project/AuroraTrain/test_images'
-
-#     for image_path in glob.glob(test_image_path + '/*.png'):
-#         print(image_path)
-#         image = Image.open(image_path)
-#         image_np = load_image_into_numpy_array(image)
-
-#         projection_point = (400, 300)
-
-#         print(clf.get_classification(image_np, projection_point))
