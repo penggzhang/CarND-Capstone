@@ -1,0 +1,4 @@
+<?xml version="1.0"?>
+<launch>
+    <node pkg="control_visualization" type="control_visualization.py" name="control_visualization" output="screen"/>
+</launch>
