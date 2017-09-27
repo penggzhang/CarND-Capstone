@@ -28,7 +28,7 @@ TODO (for Yousuf and Aaron): Stopline location for each traffic light.
 LOOKAHEAD_WPS = 30       # Number of waypoints published
 SPEED_MPH     = 10.      # Forward speed in miles per hour
 STOP_LINE     = 29.      # Distance in meters to stop in front of stoplight, corresponds to white stop line
-STOP_DIST_ERR = 9.       # Distance to start applying brakes ahead of STOP_LINE
+STOP_DIST_ERR = 12.       # Distance to start applying brakes ahead of STOP_LINE
 LL_WPT_SEARCH = 3        # Number of waypoints behind to search over to detect new waypoint ahead from previous nearest waypoint
 UL_WPT_SEARCH = 20       # Number of waypoints ahead to search over to detect new waypoint ahead from previous nearest waypoint
 
@@ -80,6 +80,7 @@ class WaypointUpdater(object):
         self.light_ahead      = None
         self.search_range     = None
         self.target_speed_mps = SPEED_MPH*MPH2MPS
+        self.base_wpt_spd_mps = SPEED_MPH*MPH2MPS
         self.dist2light_m     = 9999.
         self.prev_wpt_ahead_idx = 0.
         rospy.spin()
@@ -169,9 +170,8 @@ class WaypointUpdater(object):
                     
                 else:
                     # Car goes at normal speed
-                    self.target_speed_mps = wpt.twist.twist.linear.x #SPEED_MPH*MPH2MPS
+                    self.target_speed_mps = self.base_wpt_spd_mps #SPEED_MPH*MPH2MPS
                     
-                
                 # Set speeds in waypoint list
                 wpt.twist.twist.linear.x = self.target_speed_mps
                     
@@ -332,6 +332,7 @@ class WaypointUpdater(object):
         self.waypoints = msg.waypoints
         #only need to set /base_waypoints once, unsubscribe to improve performance 
         self.base_waypoints_sub.unregister()
+        self.base_wpt_spd_mps = msg.waypoints[1].twist.twist.linear.x
         pass    
     
     # Find the distance from a waypoint to the car's current position
