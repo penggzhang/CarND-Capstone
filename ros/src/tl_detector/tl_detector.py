@@ -27,21 +27,18 @@ path_to_models = os.path.dirname(os.path.realpath(__file__)) + '/light_classific
 MODEL_DICT = {1: (path_to_models + '/graph_frcnn_resnet_sim_bosch.pb',
                   path_to_models + '/label_map_bosch.pbtxt',
                   14),
-              2: (path_to_models + '/graph_ssd_mobilenet_sim.pb',
-                  path_to_models + '/label_map_udacity.pbtxt',
-                  4),              
-              3: (path_to_models + '/graph_frcnn_resnet_real_bosch.pb',
+              2: (path_to_models + '/graph_frcnn_resnet_real_bosch.pb',
                   path_to_models + '/label_map_bosch.pbtxt',
-                  14)
+                  14),
+              3: (path_to_models + '/graph_ssd_mobilenet_sim.pb',
+                  path_to_models + '/label_map_udacity.pbtxt',
+                  4)
               }
 
 ##################
 # Set parameters
 
 VISIBLE_DISTANCE = 200
-
-# Choose a model checkpoint by specifying its id in CKPT_DICT
-MODEL_ID = 1
 
 # On/Off switch for classifier.
 CLF_ON = True
@@ -81,6 +78,12 @@ class TLDetector(object):
         config_string = rospy.get_param("/traffic_light_config")
         self.config = yaml.load(config_string)
 
+        # Find whether simulator config or site config is introduced
+        if len(self.config['stop_line_positions']) > 1:
+            model_id = 1
+        else:
+            model_id = 2
+
         sub1 = rospy.Subscriber('/current_pose', PoseStamped, self.pose_cb)
         sub2 = rospy.Subscriber('/base_waypoints', Lane, self.waypoints_cb)
 
@@ -99,7 +102,7 @@ class TLDetector(object):
 
         # Initialize classifier with specified parameters
         if CLF_ON is True:
-            ckpt, label_map, n_classes = MODEL_DICT[MODEL_ID]
+            ckpt, label_map, n_classes = MODEL_DICT[model_id]
             self.light_classifier = TLClassifier(ckpt, label_map, n_classes, SCORE_THRESHOLD)
             self.light_classifier_on = True
             print("Light classifier is running")
@@ -262,8 +265,8 @@ class TLDetector(object):
 
         """
 
-        fx = self.config['camera_info']['focal_length_x']
-        fy = self.config['camera_info']['focal_length_y']
+        #fx = self.config['camera_info']['focal_length_x']
+        #fy = self.config['camera_info']['focal_length_y']
         #Current focal lengths are probably wrong, which leads incorrect pixel transformation.
         #https://discussions.udacity.com/t/focal-length-wrong/358568
 
@@ -309,12 +312,9 @@ class TLDetector(object):
             #print("Point in camera coords: %s" % camera_point)
 
             # Perspective Correction
-            # Instead of using the focal lengths in 'sim_traffic_light_config.yaml',
-            # experiment with values in 'site_traffic_light_config.yaml'.
-            #
-            # TODO: Try some regression to find focal lengths for simulator case.
-            #
-            fx, fy = 1345, 1353
+            # Instead of using the focal lengths in simulator config,
+            # we use values in site config by hard coding.
+            fx, fy = 1345.200806, 1353.838257
             x = int(-fx * camera_point[1] / camera_point[0] + image_width  / 2)
             y = int(-fy * camera_point[2] / camera_point[0] + image_height / 2)
 
@@ -456,11 +456,10 @@ class TLDetector(object):
 
         # 2 - Check if light is available, then try to identify the color
         if light:
-            pred_state = self.get_light_state(light)
-            print("Predicted light state: %s" % pred_state)
-            
             # Use predicted light state
             if USE_PREDICTION:
+                pred_state = self.get_light_state(light)
+                print("Predicted light state: %s" % pred_state)
                 return stop_line_wp, pred_state
 
             # Use true light state
