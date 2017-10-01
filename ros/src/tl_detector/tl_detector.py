@@ -104,6 +104,7 @@ class TLDetector(object):
 
         # Initialize classifier with specified parameters
         if CLF_ON is True:
+            print("Loading inference graph ...")
             ckpt, label_map, n_classes = MODEL_DICT[model_id]
 
             # Generate the model PD file
@@ -369,8 +370,9 @@ class TLDetector(object):
         distance_car_tl = self.get_distance_between_poses(self.pose.pose, light.pose.pose) # Need the real distance
 
         #Publishing Images and metadata for debug and dataset generator
-        self.debug.publish_debug_image(cv_image, distance_car_tl, x, y) # Publishing in /debug/image_tl Use 'rqt' to visualize the image
-        self.debug.publish_debug_image_metadata(cv_image, 0, y-20, x-40, y+130, x+40) # Publishing in /debug/image_tl_metadata
+        if x != None and y != None:
+            self.debug.publish_debug_image(cv_image, distance_car_tl, x, y) # Publishing in /debug/image_tl Use 'rqt' to visualize the image
+            self.debug.publish_debug_image_metadata(cv_image, 0, y-20, x-40, y+130, x+40) # Publishing in /debug/image_tl_metadata
 
         #Get classification
         if self.light_classifier_on is True:
