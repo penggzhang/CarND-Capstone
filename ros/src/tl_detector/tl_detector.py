@@ -29,9 +29,9 @@ path_to_models = os.path.dirname(os.path.realpath(__file__)) + '/light_classific
 MODEL_DICT = {1: (path_to_models + '/graph_frcnn_resnet_sim_bosch.pb',
                   path_to_models + '/label_map_bosch.pbtxt',
                   14),
-              2: (path_to_models + '/graph_frcnn_resnet_real_bosch.pb',
-                  path_to_models + '/label_map_bosch.pbtxt',
-                  14),
+              2: (path_to_models + '/graph_frcnn_resnet_real_udacity.pb',
+                  path_to_models + '/label_map_udacity.pbtxt',
+                  4),
               3: (path_to_models + '/graph_ssd_mobilenet_sim.pb',
                   path_to_models + '/label_map_udacity.pbtxt',
                   4)
